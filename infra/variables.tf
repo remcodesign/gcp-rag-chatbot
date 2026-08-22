@@ -19,3 +19,9 @@ variable "artifact_registry_repo" {
   type        = string
   default     = "rag"
 }
+
+variable "image_tag" {
+  description = "Container image tag to deploy. Every release pins a new tag so a fresh `terraform apply` actually redeploys the Service/Job (avoids the silent no-op of a static :latest)."
+  type        = string
+  default     = "latest"
+}

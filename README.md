@@ -175,3 +175,9 @@ manual rotation as an alternative.
 - **Access control:** restrict who can read/write the bucket (e.g. `roles/storage.objectAdmin` on the bucket) so state — which contains resource metadata — is only visible to the team.
 
 <!-- --------------------------------------------------------------- -->
+
+### JOB : once apply is done, kick the seed job
+
+```bash
+gcloud run jobs execute rag-ingest --region=europe-west4
+```

@@ -10,19 +10,22 @@
 import { Firestore } from '@google-cloud/firestore';
 import { runSeed } from '../lib/orchestrate.js';
 import { loadSources } from '../lib/loadSources.js';
+import { createOpenRouterEmbedder } from '../lib/openRouterEmbedder.js';
 
 const CORPUS_DIR = process.env.CORPUS_DIR ?? '/corpus';
 
 /**
- * Returns the embed adapter. Placeholder until Domain 5 wires the real
- * OpenRouter SDK; it reads an env-provided `EMBED_BATCH` stub for local runs.
+ * Returns the production OpenRouter embedding adapter (Node fetch). The API key
+ * comes from Secret Manager via the Cloud Run Job env (infra/cloud_run.tf),
+ * never baked into the image.
  */
 function getEmbedder() {
-  // TODO(Domain5): return createOpenRouterEmbedder({ model, dims }) once the
-  // OpenRouter SDK (or a thin HTTP wrapper) is added. No new dep added here.
-  return {
-    embed: async (texts) => texts.map((t) => [t.length, 0, 0]),
-  };
+  const apiKey = process.env.OPENROUTER_API_KEY ?? '';
+  if (!apiKey) {
+    console.error('OPENROUTER_API_KEY is required to seed embeddings');
+    throw new Error('OPENROUTER_API_KEY is required');
+  }
+  return createOpenRouterEmbedder({ apiKey });
 }
 
 export async function main() {

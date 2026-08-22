@@ -29,6 +29,9 @@ infra/.terraform.lock.hcl.bak
 *.tfstate.*
 *.tfstate.backup
 *.tfvars
+!infra/terraform.tfvars
+!terraform.tfvars
+!**/terraform.tfvars
 !*.tfvars.example
 crash.log
 override.tf
