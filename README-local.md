@@ -6,7 +6,7 @@
 
 > **VERY IMPORTANT — read and follow these instructions in order:**
 >
-> **VERY IMPORTANT — NEVER RUN `./tf.sh apply` and `./tf.sh destroy` YOURSELF, YOU CAN RUN PLAN:**
+> **VERY IMPORTANT — NEVER RUN `./tf.sh apply` and `./tf.sh destroy` YOURSELF, YOU CAN RUN `./tf.sh plan`:**
 
 ### 1.1 Load project context
 
