@@ -149,10 +149,12 @@ def build(plan):
             "after": change.get("after"),
             "after_unknown": change.get("after_unknown"),
         }
-        if cat == "replace":
-            # before is None by design; nothing meaningful to diff.
-            groups.append((cat, address, raw, [], [], [], []))
-            continue
+        # NOTE: replaces (create+delete) DO carry `before`/`after` in the plan
+        # JSON for real attribute changes (e.g. a rotated secret version forces a
+        # replacement). We run the same diff as create/update so those changes
+        # are surfaced; truly diff-less replaces still fall back to
+        # "(no attr diff)" because diff_attributes/render_diff tolerate empty/
+        # missing before/after.
         added, removed, changed_ks = diff_attributes(
             change.get("before"), change.get("after")
         )
@@ -223,8 +225,12 @@ def render(plan, out_path):
                 f'<div class="card-json" id="{rid}-detail"><pre class="json">{esc(pretty)}</pre></div>'
                 f'</div>'
             )
+        # Whole-group "unchanged": if every card in this type-group is a no-op
+        # it is hidden as a unit (show via the toggle); mixed groups stay visible
+        # and their no-op cards are hidden individually by the .noop CSS.
+        group_is_unchanged = " unchanged" if all(it[0] == "no-op" for it in items) else ""
         rows.append(
-            f'<section class="group" id="{group_id}">'
+            f'<section class="group{group_is_unchanged}" id="{group_id}">'
             f'<div class="group-head" data-group="{group_id}" onclick="toggleGroup(this)">'
             f'<span class="group-toggle">▾</span> '
             f'<span class="group-type">{esc(rtype)}</span> '
@@ -280,6 +286,13 @@ def render(plan, out_path):
   .toolbar button {{ background:#1e293b; color:var(--text); border:1px solid var(--line);
                      border-radius:8px; padding:8px 14px; cursor:pointer; font-size:13px; }}
   .toolbar button:hover {{ background:#273449; }}
+  /* Buttons 1-2 (Open all details / Open all details + JSON). */
+  .toolbar .btn-plain {{ background:#1e293b; color:var(--text); border:1px solid var(--line); }}
+  .toolbar .btn-plain:hover {{ background:#273449; }}
+  /* Buttons 3-4 (Close all details / Show unchanged): a distinct tone so they
+     are visually separate from the first two and from the reset button. */
+  .toolbar .btn-toggle {{ background:#3730a3; color:#e0e7ff; border:1px solid #4f46e5; }}
+  .toolbar .btn-toggle:hover {{ background:#4338ca; }}
   .toolbar .spacer {{ flex:1; }}
   .toolbar .reset {{ background:#7f1d1d; border-color:#b91c1c; color:#fff; font-weight:600; }}
   .toolbar .reset:hover {{ background:#991b1b; }}
@@ -336,6 +349,13 @@ def render(plan, out_path):
   .card.replace {{ border-left:4px solid #805ad5; }}
   .card.delete {{ border-left:4px solid #e53e3e; }}
   .card.noop {{ border-left:4px solid #718096; }}
+  /* Unchanged (no-op) resources hide by default; a toolbar toggle shows them.
+     Entirely-unchanged type-groups hide as a unit; unchanged cards inside a
+     mixed group hide on their own. */
+  .group.unchanged {{ display:none; }}
+  body.show-unchanged .group.unchanged {{ display:block; }}
+  .card.noop {{ display:none; }}
+  body.show-unchanged .card.noop {{ display:block; }}
 </style>
 </head>
 <body>
@@ -345,9 +365,11 @@ def render(plan, out_path):
   </header>
   <div class="summary">{summary_html}</div>
   <div class="toolbar">
-    <button type="button" onclick="openDiffs()">Open all details</button>
-    <button type="button" onclick="openAll()">Open all details + JSON</button>
-    <button type="button" onclick="closeAll()">Close all details</button>
+    <button type="button" class="btn-plain" onclick="openDiffs()">Open all details</button>
+    <button type="button" class="btn-plain" onclick="openAll()">Open all details + JSON</button>
+    <button type="button" class="btn-toggle" onclick="closeAll()">Close all details</button>
+    <button type="button" id="toggleUnchangedBtn" class="btn-toggle" onclick="toggleUnchanged()"
+            title="Show groups/resources that have no changes">Show unchanged</button>
     <span class="spacer" aria-hidden="true"></span>
     <button type="button" class="reset" onclick="resetFilter()">Reset</button>
   </div>
@@ -400,11 +422,20 @@ def render(plan, out_path):
       var groups = document.querySelectorAll('.group');
       for (var j = 0; j < groups.length; j++) groups[j].classList.remove('collapsed');
     }}
+    function toggleUnchanged() {{
+      document.body.classList.toggle('show-unchanged');
+      var btn = document.getElementById('toggleUnchangedBtn');
+      if (btn) btn.textContent = document.body.classList.contains('show-unchanged')
+          ? 'Hide unchanged' : 'Show unchanged';
+    }}
     function resetFilter() {{
       var stats = document.querySelectorAll('.summary .stat');
       for (var i = 0; i < stats.length; i++) stats[i].classList.remove('active');
       var cards = document.querySelectorAll('.card');
       for (var i = 0; i < cards.length; i++) cards[i].style.display = '';
+      document.body.classList.remove('show-unchanged');
+      var btn = document.getElementById('toggleUnchangedBtn');
+      if (btn) btn.textContent = 'Show unchanged';
     }}
   </script>
 </body>
