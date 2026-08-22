@@ -14,11 +14,17 @@ coverage/
 .env.*
 !.env.example
 
+# Do not commit the local JSON key
+*.json
+credentials.json
+
 # Terraform
 infra/.terraform/
+infra/.terraform.lock.hcl
 infra/.terraform.lock.hcl.bak
 *.tfstate
 *.tfstate.*
+*.tfstate.backup
 *.tfvars
 !*.tfvars.example
 crash.log
