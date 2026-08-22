@@ -69,11 +69,15 @@ build_image() {
     build_args+=(--build-arg "VITE_API_BASE=$VITE_API_BASE")
   fi
   # Build + push in one step so the tagged image is in Artifact Registry.
+  # NOTE: `${build_args[@]+"${build_args[@]}"}` guards the EMPTY array under
+  # `set -u`. On bash 3.2 (macOS default), `"${build_args[@]}"` on an empty
+  # array triggers "unbound variable" and aborts the script.
   if docker buildx version >/dev/null 2>&1; then
     docker buildx build --platform "$PLATFORM" --push \
-      "${build_args[@]}" --tag "$img" "$ROOT/$dir"
+      ${build_args[@]+"${build_args[@]}"} --tag "$img" "$ROOT/$dir"
   else
-    docker build --platform "$PLATFORM" "${build_args[@]}" --tag "$img" "$ROOT/$dir"
+    docker build --platform "$PLATFORM" \
+      ${build_args[@]+"${build_args[@]}"} --tag "$img" "$ROOT/$dir"
     docker push "$img"
   fi
   echo "$img"

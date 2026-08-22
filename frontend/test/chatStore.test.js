@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { isProxy, isReactive } from 'vue';
 import { createChatStore, STATUS, STAGES } from '../src/lib/chatStore.js';
 import { parseSse } from '../src/lib/sseParser.js';
 
@@ -31,6 +32,30 @@ describe('chatStore — streaming (Step 6.1)', () => {
     await store.sendMessage({ sessionId: 's1', query: 'hi' });
     expect(store.state.answer).toBe('Hello world');
     expect(store.state.status).toBe(STATUS.DONE);
+  });
+
+  it('exposes reactive state so the Vue UI re-renders on mutations', async () => {
+    // Regression guard: store.state must be a Vue reactive proxy. If it were a
+    // plain object, computed refs in App.vue would never update and the chat
+    // would show nothing even though SSE frames arrive.
+    const send = makeSend([
+      [progress(1, STAGES.RETRIEVAL, 40), token(2, 'Hello '), done(3)],
+    ]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    expect(isReactive(store.state)).toBe(true);
+    expect(isProxy(store.state)).toBe(true);
+
+    // watchEffect tracks store.state.answer; it must re-run when a token lands.
+    const { watchEffect } = await import('vue');
+    let runs = 0;
+    let lastAnswer = null;
+    const stop = watchEffect(() => { runs += 1; lastAnswer = store.state.answer; });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    await Promise.resolve();
+    stop();
+    expect(store.state.answer).toBe('Hello ');
+    expect(runs).toBeGreaterThan(1); // initial + re-run after token appended
+    expect(lastAnswer).toBe('Hello ');
   });
 
   it('merges the running citation list from token events', async () => {

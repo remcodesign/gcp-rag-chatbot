@@ -18,6 +18,8 @@
  * async generator — no network, no DOM.
  */
 
+import { reactive } from 'vue';
+
 /** Stage labels mirrored from the backend `STAGES`. */
 export const STAGES = Object.freeze({
   RETRIEVAL: 'retrieval',
@@ -61,7 +63,10 @@ export function createChatStore(deps, options = {}) {
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryBaseMs = options.retryBaseMs ?? RETRY_BASE_MS;
 
-  const state = {
+  // Reactive so the Vue components reading `store.state.*` re-render on every
+  // mutation. A plain object here would NOT trigger updates — the root cause of
+  // "SSE arrives but nothing renders".
+  const state = reactive({
     status: STATUS.IDLE,
     stage: null,
     progress: 0,
@@ -71,7 +76,7 @@ export function createChatStore(deps, options = {}) {
     error: null,
     lastEventId: null,
     retryCount: 0,
-  };
+  });
 
   let controller = null;
   let sessionId = null;
