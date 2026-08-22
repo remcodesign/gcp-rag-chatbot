@@ -25,9 +25,11 @@ GCS backend — so you never have to carry credentials around yourself.
 
 ```bash
 # From the repo root (anywhere). The script finds infra/ itself.
+# From the repo root (anywhere). The script finds infra/ itself.
 ./tf.sh init                      # init backend, load remote state
 ./tf.sh init -migrate-state     # once, if coming from a local backend
-./tf.sh plan                    # init + plan (dry-run)
+./tf.sh plan                    # plan + open color-coded HTML viewer
+./tf.sh plan-view               # explicit alias for plan + viewer
 ./tf.sh apply                   # init + apply (confirm prompt)
 ./tf.sh apply -auto-approve     # non-interactive (CI)
 ./tf.sh destroy                 # init + destroy
@@ -36,6 +38,14 @@ GCS backend — so you never have to carry credentials around yourself.
 
 # Provide the OpenRouter key when plan/apply need it:
 TF_VAR_openrouter_api_key=sk-... ./tf.sh plan
+```
+
+**Plan viewer** — run the plan and open a color-coded HTML report (NEW /
+CHANGE / REPLACE / DELETE / UNCHANGED / READ) in your browser:
+
+```bash
+./tf.sh plan-view              # generates a plan and opens the web viewer
+PLAN_VIEW_OUT=~/plan.html ./tf.sh plan-view   # write the report elsewhere
 ```
 
 The same commands run directly from `infra/` if you prefer (the raw Terraform
@@ -151,6 +161,8 @@ manual rotation as an alternative.
 ---
 
 > **VERY IMPORTANT — read and follow these instructions in order:**
+
+> **VERY IMPORTANT — NEVER RUN `./tf.sh apply` and `./tf.sh destroy` YOURSELF, YOU CAN RUN PLAN:**
 
 ### 1.1 Load project context
 

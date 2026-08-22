@@ -9,6 +9,9 @@ dist/
 coverage/
 *.tsbuildinfo
 
+# Python
+__pycache__/
+
 # Environment / secrets — never commit keys
 .env
 .env.*
@@ -53,3 +56,6 @@ logs/
 
 # docs
 docs/
+
+# plan-view.html
+plan-view.html

@@ -9,7 +9,8 @@
 # Usage:
 #   ./tf.sh init                  # terraform init (load remote state)
 #   ./tf.sh init -migrate-state   # once, if coming from a local backend
-#   ./tf.sh plan                  # init + plan (dry-run)
+#   ./tf.sh plan                  # plan + open the HTML viewer (see plan-view)
+#   ./tf.sh plan-view             # explicit alias for the plan + viewer
 #   ./tf.sh apply                 # init + apply (confirm prompt)
 #   ./tf.sh apply -auto-approve   # non-interactive (CI)
 #   ./tf.sh destroy               # init + destroy
@@ -37,6 +38,8 @@ INFRA_DIR="$SCRIPT_DIR/infra"
 TERRAFORM_BIN="${TERRAFORM_BIN:-terraform}"
 GCLOUD_BIN="${GCLOUD_BIN:-gcloud}"
 GSUTIL_BIN="${GSUTIL_BIN:-gsutil}"
+PYTHON_BIN="${PYTHON_BIN:-python3}"
+OPEN_BIN="${OPEN_BIN:-open}"          # macOS; Linux users can set BROWSER
 
 # --- Helpers ------------------------------------------------------------------
 die() { echo "error: $*" >&2; exit 1; }
@@ -100,6 +103,41 @@ run_secret() {
   esac
 }
 
+run_plan_view() {
+  cd "$INFRA_DIR"
+
+  # Use a global so the EXIT/RETURN trap can see it even after locals go out
+  # of scope (avoids 'tmp_dir: unbound variable' under set -u).
+  _TMP_DIR="$(mktemp -d)"
+  trap 'rm -rf "$_TMP_DIR"' RETURN EXIT
+
+  fetch_credentials "$_TMP_DIR"
+
+  local plan_file="$_TMP_DIR/plan.tfplan"
+  local plan_json="$_TMP_DIR/plan.json"
+  local out_html="${PLAN_VIEW_OUT:-$SCRIPT_DIR/plan-view.html}"
+  local report_py="$SCRIPT_DIR/tools/plan_report.py"
+
+  [[ -f "$report_py" ]] || die "plan_report.py not found at $report_py"
+  command -v "$PYTHON_BIN" >/dev/null 2>&1 || die "python3 is required for plan-view"
+
+  # 1. Generate the plan to a binary file (from remote state).
+  "$TERRAFORM_BIN" plan -out="$plan_file" "$@"
+
+  # 2. Convert to JSON for the report.
+  "$TERRAFORM_BIN" show -json "$plan_file" > "$plan_json"
+
+  # 3. Render the HTML report and open it in the default browser.
+  "$PYTHON_BIN" "$report_py" "$plan_json" -o "$out_html"
+  echo "Plan report: $out_html"
+
+  if command -v "$OPEN_BIN" >/dev/null 2>&1 && [[ "$(uname -s)" == "Darwin" ]]; then
+    "$OPEN_BIN" "$out_html"
+  else
+    echo "Open $out_html manually in your browser."
+  fi
+}
+
 run_terraform() {
   # Terraform must run from the infra dir (backend config lives there).
   cd "$INFRA_DIR"
@@ -123,17 +161,32 @@ run_terraform() {
 
   local tmp_dir
   tmp_dir="$(mktemp -d)"
-  # Always remove the temp credentials when the script exits.
-  trap 'rm -rf "$tmp_dir"' RETURN EXIT
+  # Always remove the temp credentials when the script exits. Store the dir in
+  # a global so the EXIT trap can resolve it after the local scope is gone.
+  _TMP_DIR="$tmp_dir"
+  trap 'rm -rf "$_TMP_DIR"' RETURN EXIT
 
   fetch_credentials "$tmp_dir"
   "$TERRAFORM_BIN" "$@"
 }
 
 # --- Main -------------------------------------------------------------------
-if [[ "${1:-}" == "secret" ]]; then
-  shift
-  run_secret "$@"
-else
-  run_terraform "$@"
-fi
+main() {
+  local cmd="${1:-}"
+  case "$cmd" in
+    secret)
+      shift
+      run_secret "$@"
+      ;;
+    plan|plan-view)
+      # `plan` and `plan-view` both run the plan and open the HTML viewer.
+      shift
+      run_plan_view "$@"
+      ;;
+    *)
+      run_terraform "$@"
+      ;;
+  esac
+}
+
+main "$@"
