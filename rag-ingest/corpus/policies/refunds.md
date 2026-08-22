@@ -1,9 +1,14 @@
 ---
 id: policies-refund-01
 category: policies
-title: "Refund timing"
-url: /help/refunds
+title: "Terugbetalingstermijn"
+url: /help/terugbetalingen
 ---
 
-### When will I see my refund?
-Refunds are processed within 5-10 business days of receipt. There is a 90-day waiting period for returns processed during seasonal promotions.
+### Wanneer zie ik mijn terugbetaling?
+
+Terugbetalingen worden binnen 5 tot 10 werkdagen naontvangst verwerkt. Voor retourzendingen tijdens seizoensaanbiedingen geldt een wachttijd van 90 dagen.
+
+### Naar welk bedrag word terugbetaald?
+
+Het volledige aankoopbedrag wordt terugbetaald op de oorspronkelijke betaalmethode. Verzendkosten worden niet vergoed tenzij het artikel beschadigd of verkeerd was.

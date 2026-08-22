@@ -1,9 +1,14 @@
 ---
 id: support-ticket-01
 category: support
-title: "Bug report zipper failure"
+title: "Ritssluiting defect op Trailback"
 url: /support/tickets
 ---
 
-### Zipper jammed on Trailback 40
-Customer reported the front pocket zipper catching. Recommendation: apply zipper lubricant and exercise the slider over the full arc before returning.
+### Rits loopt vast op Trailback 40
+
+Klant meldt dat de rits van het voorvak blijft haken. Advies: breng ritsglijmiddel aan en beweeg de schuif over de volledige boog voordat je het artikel retourneert.
+
+### Rits knakt bij dicht rit
+
+Tweede melding over hetzelfde artikelnummer: de rits sluit niet volledig. Dit kan wijzen op een losse steek aan het uiteinde. Een medewerker van de werkplaats moet dit beoordelen.

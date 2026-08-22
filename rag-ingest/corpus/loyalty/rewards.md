@@ -1,9 +1,14 @@
 ---
 id: loyalty-rewards-01
 category: loyalty
-title: "Rewards points"
+title: "Spaarpunten en beloningen"
 url: /help/loyalty
 ---
 
-### How do I earn rewards points?
-Earn one point per dollar spent on full-price items. Points can be redeemed for gift cards starting at 500 points.
+### Hoe verdien ik spaarpunten?
+
+Je verdient één punt per euro die je uitgeeft aan artikelen van de normale prijs. Punten kunnen vanaf 500 punten worden ingewisselen voor cadeaukaarten.
+
+### Waar kan ik mijn punten zien?
+
+Bekijk je actuele puntenaantal in je account onder Beloningen. Punten zijn 24 maanden geldig na verdienen.
