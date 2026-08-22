@@ -1,5 +1,13 @@
 # README - Local
 
+---
+
+now lets build and document `docs`:
+
+`## Domain 6: Vue 3 Frontend (streaming chat)`
+
+---
+
 ## Pre-prompt (paste at top of every new chat)
 
 ---
