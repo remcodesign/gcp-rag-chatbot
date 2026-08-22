@@ -19,14 +19,23 @@ export function isRelevant(hit, { minScore = 0.3 } = {}) {
 /**
  * Builds the prompt context lines and a source map for citations.
  *
+ * Drops empty / low-relevance docs (isRelevant) AND caps the number of sources
+ * fed to the LLM (`maxSources`). Without the cap, a small corpus can put nearly
+ * every retrieved chunk into the context window (seen live: 15 sources incl.
+ * irrelevant ones — tent, cadeaukaarten, retourbeleid), which wastes tokens and
+ * can distract the model. A hard top-K keeps the context tight.
+ *
  * @param {Array<object>} hits  retrieved + reranked docs, each with `id`,
  *   `text`, `title`, `url` and a similarity score.
  * @param {object} [options]
  * @param {number} [options.minScore=0.3]  relevance floor for including a doc.
+ * @param {number} [options.maxSources=5]  hard cap on sources in the context.
  * @returns {{ sourceMap: Record<string, {title:string,url:string}>, context: string, sources: Array<object> }}
  */
-export function buildContext(hits, { minScore = 0.3 } = {}) {
-  const kept = (Array.isArray(hits) ? hits : []).filter((h) => isRelevant(h, { minScore }));
+export function buildContext(hits, { minScore = 0.3, maxSources = 5 } = {}) {
+  const kept = (Array.isArray(hits) ? hits : [])
+    .filter((h) => isRelevant(h, { minScore }))
+    .slice(0, maxSources); // relevance-first, then hard cap
 
   const sourceMap = {};
   const sources = [];

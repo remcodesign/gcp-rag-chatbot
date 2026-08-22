@@ -76,7 +76,12 @@ export function createPipeline(deps, options = {}) {
     const retrievalHits = embedResult.hits;
     const rerankOutcome = await reranker.rerank(effectiveQuery, retrievalHits);
     const t2 = Date.now();
-    const context = buildContext(rerankOutcome.hits);
+    // Context relevance: keep the relevance floor + cap the number of sources
+    // so a small corpus does not dump every retrieved chunk into the LLM window.
+    const context = buildContext(rerankOutcome.hits, {
+      minScore: options.minScore,
+      maxSources: options.maxSources,
+    });
     const t3 = Date.now();
 
     return {

@@ -43,10 +43,12 @@ function createRuntime() {
   // capable). The default 1500ms soft timeout is far too tight and caused
   // retrieval to silently degrade to no-context. Give the embed a realistic
   // budget; the soft timeout still bounds the tail so a slow embed returns
-  // what it has instead of hanging the stream.
+  // what it has instead of hanging the stream. maxSources caps how many
+  // retrieved chunks reach the LLM context (a small corpus otherwise dumps
+  // ~all of them into the prompt, wasting tokens and distracting the model).
   const pipeline = createPipeline(
     { firestore, embeddings },
-    { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000 },
+    { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000, minScore: 0.35, maxSources: 5 },
   );
   const bridge = createChatBridge(createOpenRouterClient(), { model: CHAT_MODEL });
   const generator = createGenerator({ bridge, pipeline, store: state });

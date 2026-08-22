@@ -217,6 +217,20 @@ describe('Step 3.5 — context + source map construction', () => {
     expect(context).not.toContain('Irrelevant');
     expect(sources).toHaveLength(1);
   });
+
+  it('caps the number of sources so a small corpus does not flood the context', () => {
+    // Simulate a small corpus where ~all retrieved chunks score above the floor.
+    const hits = Array.from({ length: 12 }, (_, i) => ({
+      id: `c${i}`,
+      title: `Chunk ${i}`,
+      url: `/c${i}`,
+      text: `A relevant document body that is long enough for chunk ${i}.`,
+      similarityScore: 0.6 - i * 0.01,
+    }));
+    const { context, sources } = buildContext(hits, { maxSources: 5, minScore: 0.4 });
+    expect(sources).toHaveLength(5); // hard cap, not all 12
+    expect(context.split('[Source').length - 1).toBe(5);
+  });
 });
 
 describe('Pipeline integration', () => {
