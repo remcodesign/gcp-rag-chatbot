@@ -15,7 +15,7 @@ import { readManifest, checkSeedNeeded, writeManifest } from './manifest.js';
 import { writeTextFields, writeVectors } from './seeder.js';
 
 /** Bumped whenever the corpus content or embedding contract changes. */
-export const CURRENT_VERSION = '4';
+export const CURRENT_VERSION = '5';
 
 /**
  * Runs the seed job.

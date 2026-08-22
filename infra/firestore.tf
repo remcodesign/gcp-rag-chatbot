@@ -56,3 +56,34 @@ resource "google_firestore_field" "sessions_expires_at" {
 
   ttl_config {} # expiring docs identified by the timestamp in `expiresAt`
 }
+
+# ---------------------------------------------------------------------------
+# Firestore VECTOR index on the `chunks` collection (`embedding` field).
+#
+# CRITICAL: `findNearest` (Domain 3 retrieval) REQUIRES this index — without it
+# Firestore rejects the query with:
+#   FAILED_PRECONDITION: Missing vector index configuration
+# The `withSoftTimeout` in the retrieval path swallows that as an empty result,
+# which is why the app "tried" RAG but returned 0 hits / no context.
+#
+# Vector fields must come after `__name__` (the provider's documented shape).
+# `dimension` must match the embedding model (openai/text-embedding-3-small = 1536).
+# ---------------------------------------------------------------------------
+resource "google_firestore_index" "chunks_embedding_vector" {
+  project    = var.project_id
+  database   = google_firestore_database.main.name
+  collection = "chunks"
+
+  fields {
+    field_path = "__name__"
+    order      = "ASCENDING"
+  }
+
+  fields {
+    field_path = "embedding"
+    vector_config {
+      dimension = 1536
+      flat {}
+    }
+  }
+}
