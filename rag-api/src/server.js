@@ -39,7 +39,15 @@ function createRuntime() {
   const firestore = new Firestore();
   const embeddings = createOpenRouterEmbedder({ apiKey: OPENROUTER_API_KEY });
   const state = createStateStore(firestore);
-  const pipeline = createPipeline({ firestore, embeddings });
+  // Query-time embedding hits OpenRouter (a real network call, cold-start
+  // capable). The default 1500ms soft timeout is far too tight and caused
+  // retrieval to silently degrade to no-context. Give the embed a realistic
+  // budget; the soft timeout still bounds the tail so a slow embed returns
+  // what it has instead of hanging the stream.
+  const pipeline = createPipeline(
+    { firestore, embeddings },
+    { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000 },
+  );
   const bridge = createChatBridge(createOpenRouterClient(), { model: CHAT_MODEL });
   const generator = createGenerator({ bridge, pipeline, store: state });
   const { handleLiveness, handleReadiness } = createHealth({ firestore });

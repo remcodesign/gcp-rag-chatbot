@@ -114,13 +114,25 @@ export function createGenerator(deps, options = {}) {
   async function streamAnswer({ sse, sessionId, query, options = {} }) {
     sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RETRIEVAL, progress: 40 });
 
-    let runOutcome = { sourceMap: {}, context: '', sources: [], retrievalHits: [] };
+    let runOutcome = { query, sourceMap: {}, context: '', sources: [], retrievalHits: [] };
     try {
       runOutcome = await pipeline.run(query, { history: options.history });
     } catch (err) {
       // Retrieval failure: still answer, just without context (graceful degrade).
+      // Keep the query + a diagnosis in the trace so the sidebar shows WHY no
+      // context was found, instead of an empty query.
       logger.warn(`retrieval failed for ${sessionId}: ${err.message}`);
-      runOutcome = { sourceMap: {}, context: '', sources: [], retrievalHits: [] };
+      runOutcome = {
+        query,
+        sourceMap: {},
+        context: '',
+        sources: [],
+        retrievalHits: [],
+        classification: null,
+        error: { message: err.message },
+        timings: null,
+        timedOut: true,
+      };
     }
 
     sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RERANK, progress: 60 });

@@ -8,9 +8,11 @@
 
 /**
  * Runs `fn` but resolves with the given `fallback` if it does not settle within
- * `timeoutMs`. The underlying task is NOT cancelled (its answer may still be
- * used by the caller) — this is a *soft* timeout: we bound how long we *wait*,
- * we do not kill work in flight.
+ * `timeoutMs`, OR if `fn` rejects. The underlying task is NOT cancelled (its
+ * answer may still be used by the caller) — this is a *soft* timeout: we bound
+ * how long we *wait* and we never let a downstream failure (e.g. an OpenRouter
+ * embed error) throw out of the retrieval path. A rejection is treated like a
+ * timeout: resolve with `{ timedOut: true, value: fallback }`.
  */
 export function withSoftTimeout(fn, { timeoutMs, fallback, label = 'async task' } = {}) {
   let timer;
@@ -18,9 +20,12 @@ export function withSoftTimeout(fn, { timeoutMs, fallback, label = 'async task' 
     timer = setTimeout(() => resolve({ timedOut: true, value: fallback }), timeoutMs);
     if (timer.unref) timer.unref();
   });
-  return Promise.race([fn().then((value) => ({ timedOut: false, value })), timeout]).finally(() =>
-    clearTimeout(timer),
-  );
+  return Promise.race([
+    fn()
+      .then((value) => ({ timedOut: false, value }))
+      .catch(() => ({ timedOut: true, value: fallback })),
+    timeout,
+  ]).finally(() => clearTimeout(timer));
 }
 
 /**

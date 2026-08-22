@@ -135,14 +135,18 @@ function newSession() {
           </p>
 
           <template v-else>
-            <section class="trace-block">
-              <h3>Query</h3>
-              <p class="trace-query">{{ trace.query }}</p>
-              <p class="trace-meta">Classification: {{ trace.classification }}</p>
-            </section>
+        <section v-if="trace.error" class="trace-error" role="alert">
+          Retrieval failed — answering without context. {{ trace.error.message }}
+        </section>
 
-            <section class="trace-block">
-              <h3>Retrieval ({{ trace.retrieved.length }})</h3>
+        <section class="trace-block">
+          <h3>Query</h3>
+          <p class="trace-query">{{ trace.query }}</p>
+          <p class="trace-meta">Classification: {{ trace.classification }}</p>
+        </section>
+
+        <section class="trace-block">
+          <h3>Retrieval ({{ trace.retrieved.length }})</h3>
               <ul class="trace-chunks">
                 <li
                   v-for="c in trace.retrieved"

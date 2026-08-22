@@ -34,6 +34,7 @@ export function normalizeTrace(trace) {
     context: trace.context || { sources: [], length: 0 },
     timings: trace.timings || null,
     timedOut: !!trace.timedOut,
+    error: trace.error || null,
     finalPrompt: Array.isArray(trace.finalPrompt) ? trace.finalPrompt.join('\n\n') : '',
   };
 }

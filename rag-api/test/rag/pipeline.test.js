@@ -139,6 +139,18 @@ describe('Step 3.3 — soft timeout + concurrency limiting', () => {
     // withSoftTimeout only bounds wait; a fast resolver returns its value.
     expect(result.value).toBe('x');
   });
+
+  it('does not throw when the wrapped task REJECTS — it returns the fallback (soft degrade)', async () => {
+    // Regression: a rejected embed (e.g. OpenRouter error) used to propagate out
+    // of withSoftTimeout and throw through pipeline.run -> the generator silently
+    // degraded to no-context. A rejection must be treated like a timeout.
+    const result = await withSoftTimeout(
+      () => Promise.reject(new Error('OpenRouter embeddings HTTP 500')),
+      { timeoutMs: 1000, fallback: [] },
+    );
+    expect(result.timedOut).toBe(true);
+    expect(result.value).toEqual([]);
+  });
 });
 
 describe('Step 3.4 — dynamic reranking (conditional skip)', () => {

@@ -1,21 +1,44 @@
 import { describe, it, expect } from 'vitest';
 import { renderAnswer, buildSourceChips } from '../src/lib/citations.js';
 
+// Node test env has no DOM, so DOMPurify's real sanitizer can't run. For the
+// markdown-structure assertions we inject a permissive sanitize (identity on
+// tags) so we can verify marked actually emits headings/lists/bold. The
+// real-DOMPurify sanitization is exercised by the browser build; the escape
+// fallback is asserted separately.
+const keepHtml = { sanitize: (html) => html };
+
 describe('renderAnswer', () => {
   it('wraps inline [Source N] markers in citation spans', () => {
-    const html = renderAnswer('You can return it within 30 days. [Source 1]');
+    const html = renderAnswer('You can return it within 30 days. [Source 1]', keepHtml);
     expect(html).toContain('<span class="citation">[Source 1]</span>');
   });
 
-  it('escapes HTML so untrusted text cannot inject markup', () => {
+  it('renders markdown into HTML (headings, bold)', () => {
+    const html = renderAnswer('### Returns\n\nYou can **return** within 30 days.', keepHtml);
+    expect(html).toContain('<h3');
+    expect(html).toContain('<strong>return</strong>');
+    expect(html).toContain('You can <strong>return</strong> within 30 days.');
+  });
+
+  it('escapes untrusted markup in a no-DOM env (safe fallback)', () => {
+    // No deps injected -> resolveSanitize() falls back to HTML-escaping because
+    // DOMPurify isn't available in node. Raw <script> must not survive.
     const html = renderAnswer('<script>alert(1)</script> & [Source 2]');
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
     expect(html).toContain('&amp;');
   });
 
-  it('leaves text without citations unchanged (safe)', () => {
-    expect(renderAnswer('plain answer')).toBe('plain answer');
+  it('renders a list when the answer contains one', () => {
+    const html = renderAnswer('Steps:\n\n- one\n- two\n', keepHtml);
+    expect(html).toContain('<ul>');
+    expect(html).toContain('<li>one</li>');
+  });
+
+  it('keeps plain text readable', () => {
+    const html = renderAnswer('plain answer', keepHtml);
+    expect(html).toContain('plain answer');
   });
 });
 

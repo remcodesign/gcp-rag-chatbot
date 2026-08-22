@@ -43,15 +43,18 @@ not be reintroduced.
 ## Gotchas (highest-frequency agent mistakes)
 1. **Commit BEFORE `deploy.sh plan/apply`.** Image tag = git short SHA of **HEAD**, not the working tree. Uncommitted edits → unchanged tag → `apply` reports "No changes". After a code change expect `2 to change` (Service + Job).
 2. **Corpus path is `/app/corpus`** (Dockerfile `WORKDIR /app` + `COPY corpus ./corpus`, `ENV CORPUS_DIR=/app/corpus`, and the Cloud Run job env in `infra/cloud_run.tf`). Never write a bare `/corpus`.
-3. **Seed job idempotency:** the seeder skips when the stored manifest `version` equals `CURRENT_VERSION` (currently `'2'`). To force a real re-seed, bump `CURRENT_VERSION` in `rag-ingest/lib/orchestrate.js`, commit, push/apply, then `gcloud run jobs execute rag-ingest --region=europe-west4`. A `chunkCount: 0` usually means a stale image tag (missing corpus) — commit first to bump the SHA.
-4. **Provider gotchas:** use `google_cloud_run_v2_job` (no GA v1 job) with `deletion_protection = false`. v2 inner `template` has NO `spec` block (`timeout`/`service_account`/`containers` directly inside); `task_count`/`parallelism` on the OUTER `template`. Service stays v1; v1 secret ref = `secret_key_ref { key="latest" }`, v2 job = `secret_key_ref { secret, version }`. Mixing them fails `terraform validate`.
-5. **`.gitignore *.tfvars`** must negate with `!**/terraform.tfvars` so the committed tag is tracked.
-6. **Stale `.tflock`** in the bucket after an aborted plan → `Error 412 conditionNotMet`. Clear: `gcloud storage rm gs://<bucket>/terraform/state/default.tflock`.
-7. **`deploy.sh push` only fills the registry** — a new tag must still be `apply`d to reach Cloud Run.
+3. **Seed job idempotency:** the seeder skips when the stored manifest `version` equals `CURRENT_VERSION` (currently `'4'`). To force a real re-seed, bump `CURRENT_VERSION` in `rag-ingest/lib/orchestrate.js`, commit, push/apply, then `gcloud run jobs execute rag-ingest --region=europe-west4`. A `chunkCount: 0` usually means a stale image tag (missing corpus) — commit first to bump the SHA.
+4. **Vectors MUST be `FieldValue.vector(...)` (ROOT CAUSE of "no RAG").** Real Firestore only treats a field as a *vector* for `findNearest` when it is written with `FieldValue.vector(array)`. `rag-ingest/lib/seeder.js` `writeVectors` previously wrote a **plain array**, so `findNearest` returned nothing at query time and the generator silently answered without context (trace: `retrieved:[]`, `timings:null`). The in-memory fake stores a plain array, so unit tests pass even when the real write is wrong. After deploying the fix, chunks already seeded with plain arrays must be **re-seeded** (bump `CURRENT_VERSION`).
+5. **`withSoftTimeout` swallows rejections (silent degrade):** `rag-api/lib/rag/limiter.js` only handled timeouts — a **rejected** wrapped task (embed/`findNearest` error) propagated out of `pipeline.run()` and threw, and the generator's catch silently answered with no context. It now `.catch(() => ({ timedOut:true, value:fallback }))`, treating a rejection like a timeout so retrieval never throws. If the RAG trace shows `error:{message}` + `timedOut:true`, investigate the retrieval path here.
+6. **Query-time embed timeout:** `rag-api/src/server.js` `createPipeline` passes `{ embedTimeoutMs: 8000, retrieveTimeoutMs: 4000 }` — the 1500ms default embed soft timeout is too tight for a real OpenRouter embed.
+7. **Provider gotchas:** use `google_cloud_run_v2_job` (no GA v1 job) with `deletion_protection = false`. v2 inner `template` has NO `spec` block (`timeout`/`service_account`/`containers` directly inside); `task_count`/`parallelism` on the OUTER `template`. Service stays v1; v1 secret ref = `secret_key_ref { key="latest" }`, v2 job = `secret_key_ref { secret, version }`. Mixing them fails `terraform validate`.
+8. **`.gitignore *.tfvars`** must negate with `!**/terraform.tfvars` so the committed tag is tracked.
+9. **Stale `.tflock`** in the bucket after an aborted plan → `Error 412 conditionNotMet`. Clear: `gcloud storage rm gs://<bucket>/terraform/state/default.tflock`.
+10. **`deploy.sh push` only fills the registry** — a new tag must still be `apply`d to reach Cloud Run.
 
 ## Quick references (canonical)
 ```bash
-cd rag-api && npm test          # ~51 tests, no creds
+cd rag-api && npm test          # ~69 tests, no creds
 cd rag-ingest && npm test       # ~13 tests, no creds
 ./deploy.sh build/push/plan     # build+push git-SHA tag; NEVER apply for the agent
 ./tf.sh plan                    # plan + HTML viewer (credentials via wrapper)

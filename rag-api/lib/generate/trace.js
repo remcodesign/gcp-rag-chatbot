@@ -99,8 +99,14 @@ export function buildTrace(outcome = {}, { messages } = {}) {
     rerank,
     context,
     timings: outcome.timings || null,
-    timedOut: !!outcome.timedOut,
+    timedOut: !!(outcome.timedOut || outcome.error),
   };
+
+  // Surface a retrieval failure reason so the sidebar shows WHY no context was
+  // found (diagnostic aid, does not leak the prompt or keys).
+  if (outcome.error) {
+    payload.error = { message: String(outcome.error.message || 'retrieval failed').slice(0, 300) };
+  }
 
   if (messages) {
     payload.finalPrompt = messages

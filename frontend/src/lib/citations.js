@@ -8,23 +8,29 @@
  *
  * `renderAnswer` is a pure function of the answer text + citation list, so it
  * is unit-testable without a DOM. The Vue component binds the returned HTML via
- * `v-html` (the text is backend-validated; citations are stripped of any
- * non-existent source, so no untrusted markup reaches the DOM).
+ * `v-html` (the text is backend-validated and sanitized; citations are stripped
+ * of any non-existent source, so no untrusted markup reaches the DOM).
+ *
+ * Since the streamed answer arrives as **Markdown**, renderAnswer first converts
+ * it to sanitized HTML (via `marked` + DOMPurify, see `lib/markdown.js`), then
+ * wraps inline `[Source N]` markers in citation chips.
  */
 
+import { renderMarkdown } from './markdown.js';
+
 /**
- * Renders the answer text with inline `[Source N]` markers wrapped in a
- * `<span class="citation">` so CSS can style them as chips.
+ * Renders markdown answer text as sanitized HTML with inline `[Source N]`
+ * markers wrapped in a `<span class="citation">` for styling.
  *
- * @param {string} text  validated answer text (may contain `[Source N]`).
- * @returns {string} HTML-safe string with citation spans.
+ * @param {string} text  validated markdown answer text (may contain `[Source N]`).
+ * @param {object} [deps]  optional `{ parse, sanitize }` overrides (see markdown.js).
+ * @returns {string} sanitized HTML with citation spans.
  */
-export function renderAnswer(text = '') {
-  return String(text)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\[Source (\d+)\]/g, '<span class="citation">[Source $1]</span>');
+export function renderAnswer(text = '', deps) {
+  const html = deps && (deps.parse || deps.sanitize)
+    ? renderMarkdown(text, deps)
+    : renderMarkdown(text);
+  return html.replace(/\[Source (\d+)\]/g, '<span class="citation">[Source $1]</span>');
 }
 
 /**

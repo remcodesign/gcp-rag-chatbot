@@ -106,4 +106,15 @@ describe('trace — buildTrace', () => {
     expect(trace.context.sources).toEqual([]);
     expect(trace.timedOut).toBe(false);
   });
+
+  it('surfaces a retrieval failure reason without leaking internals', () => {
+    const trace = buildTrace(
+      { query: 'q', error: { message: 'SomeOpenRouterEmbeddingError: fail' } },
+      {},
+    );
+    expect(trace.error).toBeDefined();
+    expect(trace.error.message).toContain('fail');
+    expect(trace.retrieved).toEqual([]);
+    expect(trace.timedOut).toBe(true);
+  });
 });

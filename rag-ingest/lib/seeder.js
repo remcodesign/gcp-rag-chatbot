@@ -5,9 +5,16 @@
  *   1. upsert text fields (Location 1) — ids are content hashes, so idempotent;
  *   2. embed the batch via the provider (array input = ONE batched call);
  *   3. batch-commit the vector field (Location 2) with `FieldValue.vector`
- *      semantics (here a plain array). Text already exists, so on embedding
- *      failure a re-run only fills missing vectors.
+ *      semantics. Text already exists, so on embedding failure a re-run only
+ *      fills missing vectors.
+ *
+ * NOTE: the real Firestore stores vectors via `FieldValue.vector(array)` — a
+ * plain array is NOT queryable by `findNearest`. The fake test double stores a
+ * plain array (elements are what matter there), so the real client must wrap
+ * the vector here.
  */
+
+import { FieldValue } from '@google-cloud/firestore';
 
 /**
  * Writes the text/metadata half of a chunk (Location 1).
@@ -51,7 +58,13 @@ export async function writeVectors(firestore, chunks, embeddings, opts = {}) {
   const batch = firestore.batch();
   chunks.forEach((chunk, i) => {
     if (vectors[i]) {
-      batch.set(firestore.collection('chunks').doc(chunk.id), { embedding: vectors[i] }, { merge: true });
+      // Real Firestore requires the vector wrapped in FieldValue.vector() for
+      // findNearest to query it. The fake stores a plain array (elements only).
+      batch.set(
+        firestore.collection('chunks').doc(chunk.id),
+        { embedding: FieldValue.vector(vectors[i]) },
+        { merge: true },
+      );
     }
   });
   await batch.commit();

@@ -41,6 +41,19 @@ describe('normalizeTrace', () => {
     expect(normalizeTrace(null)).toBeNull();
     expect(normalizeTrace(undefined)).toBeNull();
   });
+
+  it('surfaces a retrieval error so the sidebar can explain empty retrieval', () => {
+    const trace = normalizeTrace({
+      query: 'x',
+      classification: null,
+      retrieved: [],
+      error: { message: 'OpenRouter embeddings HTTP 500' },
+      timedOut: true,
+    });
+    expect(trace.error).toBeDefined();
+    expect(trace.error.message).toContain('HTTP 500');
+    expect(trace.timedOut).toBe(true);
+  });
 });
 
 describe('formatScore', () => {
