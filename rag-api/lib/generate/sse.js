@@ -1,0 +1,95 @@
+/**
+ * SSE framing helper — Domain 5, Step 5.1.
+ *
+ * Writes typed Server-Sent Events the client can route on (`progress`,
+ * `token`, `error`, `done`), each with a monotonically increasing `id` so a
+ * reconnecting client using `Last-Event-ID` can resume without duplicating or
+ * rewinding (pairs with Domain 2 `listEventsAfter`).
+ *
+ * Bound to a `res`-compatible sink so it is testable without a live HTTP
+ * server: the real Node `ServerResponse`, or a recording fake in tests. The
+ * sink must expose `writeHead(status, headers)` (called once) and `write(str)`;
+ * it may expose a `destroyed` flag so we stop writing after the socket closes.
+ */
+
+/** Default SSE event types produced by the generator flow. */
+export const SSE_EVENT = Object.freeze({
+  PROGRESS: 'progress',
+  TOKEN: 'token',
+  ERROR: 'error',
+  DONE: 'done',
+});
+
+/**
+ * Creates an SSE session bound to `res`.
+ *
+ * @param {object} res  response sink (see module header).
+ * @param {object} [options]
+ * @param {() => number} [options.idFactory]  returns the next event id (tests inject a fixed source).
+ * @returns {object} `{ send, sendRaw, end, error, get nextId, get destroyed }`.
+ */
+export function createSse(res, options = {}) {
+  let nextId = (options.idFactory ? options.idFactory() : 0);
+  let writeHeadDone = false;
+  let closed = false;
+
+  function ensureHead() {
+    if (writeHeadDone) return;
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      Connection: 'keep-alive',
+      'X-Accel-Buffering': 'no',
+    });
+    writeHeadDone = true;
+  }
+
+  function isClosed() {
+    if (closed) return true;
+    return !!(res && res.destroyed);
+  }
+
+  /**
+   * Sends a typed frame with an auto-incremented id.
+   */
+  function send(event, data) {
+    if (isClosed()) return null;
+    ensureHead();
+    const id = nextId; nextId += 1;
+    const payload = typeof data === 'string' ? data : JSON.stringify(data ?? {});
+    const frame = `id: ${id}\nevent: ${event}\ndata: ${payload}\n\n`;
+    res.write(frame);
+    return id;
+  }
+
+  /** Sends a raw pre-formatted SSE string (for replay/dedup tests). */
+  function sendRaw(str) {
+    if (isClosed()) return false;
+    ensureHead();
+    res.write(str);
+    return true;
+  }
+
+  /** Gracefully finishes the stream (marks closed, does not force-end res). */
+  function end() {
+    closed = true;
+  }
+
+  /**
+   * Sends an `error` event and closes — a mid-stream failure must surface as
+   * an SSE error, never as an HTTP 500 (the response already started).
+   */
+  function error(payload) {
+    send(SSE_EVENT.ERROR, payload);
+    closed = true;
+  }
+
+  return {
+    send,
+    sendRaw,
+    end,
+    error,
+    get nextId() { return nextId; },
+    isClosed,
+  };
+}
