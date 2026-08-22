@@ -7,6 +7,10 @@
 > **VERY IMPORTANT — read and follow these instructions in order:**
 >
 > **VERY IMPORTANT — NEVER RUN `./tf.sh apply` and `./tf.sh destroy` YOURSELF, YOU CAN RUN `./tf.sh plan`:**
+>
+> **VERY IMPORTANT — Do not use GCloud deployment or user.roles changes - only use Terraform and GIT**
+>
+> **VERY IMPORTANT — Do not use GIT commit and push yourself - only use GIT for checking state and history:**
 
 ### 1.1 Load project context
 
