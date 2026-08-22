@@ -25,3 +25,9 @@ variable "image_tag" {
   type        = string
   default     = "latest"
 }
+
+variable "terraform_runner_sa" {
+  description = "Service account that runs Terraform (the CI/deploy identity whose key tf.sh fetches from the state bucket). Its deploy role is codified here so a fresh apply rebuilds it from a blank project (terraforming the tooling identity)."
+  type        = string
+  default     = "terraform-runner"
+}

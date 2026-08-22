@@ -35,3 +35,14 @@ resource "google_project_iam_member" "job_firestore" {
   role    = "roles/datastore.user"
   member  = "serviceAccount:${google_service_account.job.email}"
 }
+
+# The deploy identity (terraform-runner). Cloud Run requires the applying SA to
+# set IAM policy on the services it creates; `roles/owner` alone left
+# `run.services.setIamPolicy` denied (roles/run.admin includes it). Codified here
+# (not a raw gcloud grant) so `destroy` + a fresh `apply` rebuilds the full
+# project — tooling identity included — with no manual IAM step.
+resource "google_project_iam_member" "terraform_runner_run_admin" {
+  project = var.project_id
+  role    = "roles/run.admin"
+  member  = "serviceAccount:${var.terraform_runner_sa}@${var.project_id}.iam.gserviceaccount.com"
+}

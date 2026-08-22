@@ -7,6 +7,10 @@
 resource "google_cloud_run_service" "api" {
   name     = "rag-api"
   location = var.region
+  # Ordering so `terraform destroy` removes the runner's deploy role last: keep
+  # run.admin until the Cloud Run resources are gone (the runner needs it to
+  # delete them). On destroy, dependencies are removed after their dependents.
+  depends_on = [google_project_iam_member.terraform_runner_run_admin]
 
   template {
     metadata {
@@ -69,6 +73,9 @@ resource "google_cloud_run_v2_job" "ingest" {
   name                = "rag-ingest"
   location            = var.region
   deletion_protection = false
+  # Same destroy-ordering as the Service: keep run.admin on the runner until the
+  # Job is gone (see the depends_on comment on google_cloud_run_service.api).
+  depends_on = [google_project_iam_member.terraform_runner_run_admin]
 
   template {
     # Run to completion; one task, no parallelism.
