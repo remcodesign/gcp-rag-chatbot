@@ -6,13 +6,13 @@
 | ----------- | --------- |
 | Project name | Demo RAG Northwind Outfitters |
 | Project ID | `rag-demo-no-506313-t5` |
-| Region | `europe-west1` (verify Firestore vector-search availability) |
+| Region | `europe-west4`
 | Backend | Node.js (Cloud Run Service `rag-api`) |
 | Frontend | Vue 3 + Vite (static build, served by Cloud Run) |
 | Vector store + state | Cloud Firestore (`findNearest`, COSINE) |
 | Embeddings + chat | OpenRouter (`openai/text-embedding-3-small` + chosen chat model) |
 | IaC | Terraform (`hashicorp/google` + `google-beta`) |
-| CI/CD | Cloud Build + Artifact Registry (repo `rag`) |
+| CI/CD | `deploy.sh` -> Artifact Registry (repo `rag`) -> Terraform apply |
 
 **Architecture in one line:** one Firestore = vector store + session/event/message state; OpenRouter = embeddings + streaming chat; GCP footprint ≈ €0/mo (all serverless, scales to zero). No Cloud SQL, no VPC connector, no BigQuery.
 
@@ -44,7 +44,6 @@ fetches `credentials.json` from the shared bucket into a temp file, points
 GCS backend — so you never have to carry credentials around yourself.
 
 ```bash
-# From the repo root (anywhere). The script finds infra/ itself.
 # From the repo root (anywhere). The script finds infra/ itself.
 ./tf.sh init                      # init backend, load remote state
 ./tf.sh init -migrate-state     # once, if coming from a local backend
@@ -175,6 +174,53 @@ manual rotation as an alternative.
 - **Access control:** restrict who can read/write the bucket (e.g. `roles/storage.objectAdmin` on the bucket) so state — which contains resource metadata — is only visible to the team.
 
 <!-- --------------------------------------------------------------- -->
+
+## Deploy & Release (build → push → apply)
+
+Build the two container images (`rag-api`, `rag-ingest`), push them to Artifact
+Registry, and roll them to Cloud Run via **`deploy.sh`**. Terraform is the sole
+deployment controller — no `gcloud run deploy` sidesteps.
+
+Each release is pinned to the **current git short SHA** (e.g. `499c540`), written
+to the committed `infra/terraform.tfvars`, so a fresh tag makes `apply` genuinely
+redeploy (no silent `:latest` no-op).
+
+```bash
+# Build both images locally (no push)
+./deploy.sh build
+
+# Build + push, pin the tag in infra/terraform.tfvars
+./deploy.sh push
+
+# Build + push, then run a terraform plan (dry-run of the rollout)
+./deploy.sh plan
+
+# Build + push, then apply (interactive confirm)
+./deploy.sh apply
+```
+
+After a **code/corpus change**, commit it **first** so the git-SHA tag bumps —
+otherwise `apply` sees the same tag and is a no-op:
+
+```bash
+git add -A && git commit -m "your change"          # tag now advances
+./deploy.sh plan                                   # expect "2 to change"
+./tf.sh apply                                      # if the plan looks good
+```
+
+Useful one-liners:
+
+```bash
+# Redeploy ONLY rag-api (skip the corpus job image)
+IMAGE_TAG=my-tag ./deploy.sh build                # override the tag manually
+
+# Point Terraform at a specific already-pushed tag
+sed -i '' 's|image_tag = .*|image_tag = "499c540"|' infra/terraform.tfvars
+
+# Health / liveness checks on the running service (after apply)
+curl -s https://rag-api-4xxip75eoa-ez.a.run.app/livez
+curl -s https://rag-api-4xxip75eoa-ez.a.run.app/readyz
+```
 
 ### JOB : once apply is done, kick the seed job
 
