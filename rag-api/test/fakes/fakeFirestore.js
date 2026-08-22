@@ -1,8 +1,9 @@
 /**
  * In-memory Firestore-shaped test double.
  *
- * Implements just enough of the `@google-cloud/firestore` surface that
- * `sessionStore.js` uses, so Domain 2 unit tests run with zero cloud deps:
+ * Implements just enough of the `@google-cloud/firestore` surface that the
+ * state store (Domain 2) and the RAG pipeline (Domain 3) use, so unit tests run
+ * with zero cloud deps:
  *
  *   - `firestore.collection(path)` and nested sub-collections via
  *     `collectionRef.doc(id).collection(name)`
@@ -12,10 +13,31 @@
  *     `get(ref)`, `set(ref, data)`, `update(ref, patch)` (applied atomically)
  *   - Query building: `col.orderBy(field).startAfter(value).limit(n).get()`,
  *     which returns snapshot docs shaped as `{ data: () => obj }`
+ *   - Vector search: `col.findNearest({...})` returning a query whose `get()`
+ *     computes the configured distance measure, adds `distanceResultField`, and
+ *     returns docs sorted nearest-first.
  *
  * Intentionally minimal — no auth, no composite indexes, no `batch()`, no
- * `.where()`, no vector search. Those belong to later domains.
+ * `.where()` filtering. Documents store their vector under a plain array field
+ * (the real client uses `FieldValue.vector`; the elements are what matter here).
  */
+
+/** Returns the cosine distance (1 - cosine similarity) between two vectors. */
+function cosineDistance(a, b) {
+  if (!a || !b || a.length === 0 || a.length !== b.length) {
+    return Infinity;
+  }
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i += 1) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  if (na === 0 || nb === 0) return 1; // zero vectors are orthogonal-ish
+  return 1 - dot / (Math.sqrt(na) * Math.sqrt(nb));
+}
 
 class FakeDocumentRef {
   constructor(path, owner) {
@@ -47,7 +69,7 @@ class FakeDocumentRef {
 
 class FakeCollectionRef {
   constructor(path, owner) {
-    this._path = path; // collection path: ['sessions'] or ['sessions', id, 'events']
+    this._path = path; // collection path: ['sessions'] or ['chunks']
     this._owner = owner;
   }
 
@@ -71,11 +93,50 @@ class FakeCollectionRef {
     return this;
   }
 
+  findNearest(opts) {
+    this._vectorQuery = opts;
+    return this;
+  }
+
   async get() {
+    if (this._vectorQuery) {
+      return this._vectorGetter();
+    }
     const docs = this._owner.list(this._path, this._orderField, this._dir, this._startAfter);
     return {
       docs: docs.map((d) => ({
         data: () => d,
+      })),
+    };
+  }
+
+  _vectorGetter() {
+    const { vectorField, queryVector, limit, distanceMeasure, distanceResultField, distanceThreshold } =
+      this._vectorQuery;
+    const distanceFn =
+      distanceMeasure === 'EUCLIDEAN'
+        ? (a, b) => {
+            let s = 0;
+            for (let i = 0; i < a.length; i += 1) s += (a[i] - b[i]) ** 2;
+            return Math.sqrt(s);
+          }
+        : cosineDistance;
+
+    const all = this._owner.list(this._path, null, 'asc', undefined);
+    const scored = all
+      .map((doc) => ({ doc, distance: distanceFn(doc[vectorField], queryVector) }))
+      .filter((s) => distanceThreshold === undefined || s.distance <= distanceThreshold)
+      .sort((x, y) => x.distance - y.distance)
+      .slice(0, limit);
+
+    return {
+      docs: scored.map(({ doc, distance }) => ({
+        data: () => {
+          const { __id, ...copy } = doc;
+          if (distanceResultField) copy[distanceResultField] = distance;
+          return copy;
+        },
+        id: doc.__id,
       })),
     };
   }
@@ -126,11 +187,15 @@ export function createFakeFirestore() {
 
     set(path, data, opts = {}) {
       const k = key(path);
+      const docId = path[path.length - 1];
       const existing = store.get(k);
       if (opts.merge && existing) {
-        store.set(k, { ...existing, ...data });
+        const { __id, ...prev } = existing;
+        const { __id: _incomingId, ...incoming } = data;
+        store.set(k, { ...prev, ...incoming, __id: __id ?? docId });
       } else {
-        store.set(k, { ...data });
+        const { __id, ...clean } = data;
+        store.set(k, { ...clean, __id: docId });
       }
     },
 
