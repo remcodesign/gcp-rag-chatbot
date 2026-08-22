@@ -20,9 +20,6 @@
 #   ./tf.sh secret list                       # all secret names in the project
 #   ./tf.sh ...                               # any other terraform command, e.g. ./tf.sh state list
 #
-# Optional: provide the Terraform input value for the OpenRouter key when
-# plan/apply create the secret for the FIRST time:
-#   TF_VAR_openrouter_api_key=sk-... ./tf.sh plan
 # ---------------------------------------------------------------------------
 set -euo pipefail
 

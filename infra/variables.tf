@@ -10,18 +10,9 @@ variable "region" {
   default     = "europe-west4"
 }
 
-variable "openrouter_api_key" {
-  description = "OpenRouter API key. Pass via TF_VAR_openrouter_api_key or env — never commit."
-  type        = string
-  sensitive   = true
-
-  # Reject an empty/missing key at plan time (spec's non-happy path) rather
-  # than fail later during apply.
-  validation {
-    condition     = var.openrouter_api_key != ""
-    error_message = "openrouter_api_key must be a non-empty OpenRouter API key."
-  }
-}
+# NOTE: there is intentionally NO `openrouter_api_key` variable here. The secret
+# value lives only in Secret Manager (`./tf.sh secret set openrouter-key <value>`),
+# so plan/apply never prompt for the key.
 
 variable "artifact_registry_repo" {
   description = "Artifact Registry repository name holding both container images"

@@ -10,10 +10,10 @@ resource "google_secret_manager_secret" "openrouter" {
   }
 }
 
-resource "google_secret_manager_secret_version" "current" {
-  secret      = google_secret_manager_secret.openrouter.name
-  secret_data = var.openrouter_api_key # passed via TF_VAR / env, never committed
-}
+# NOTE: the secret VALUE is NOT managed by Terraform. `./tf.sh secret set
+# openrouter-key <value>` writes the active version directly to Secret Manager,
+# so plan/apply never ask for `openrouter_api_key`. Terraform owns the secret
+# container + IAM accessors only.
 
 # Grant accessor to both service accounts.
 resource "google_secret_manager_secret_iam_member" "api" {
