@@ -53,6 +53,21 @@ export function createSse(res, options = {}) {
   }
 
   /**
+   * Ends the underlying response exactly once. This is REQUIRED: without it the
+   * HTTP connection stays open after the last `done`/`error` frame, and a
+   * browser `ReadableStream` reader never receives its `done` signal — the
+   * client hangs ("streaming" forever, tokens never render). Node's fetch
+   * tolerates an unterminated body; browsers do not.
+   */
+  function close() {
+    if (closed) return;
+    closed = true;
+    if (res && typeof res.end === 'function') {
+      try { res.end(); } catch { /* response already destroyed */ }
+    }
+  }
+
+  /**
    * Sends a typed frame with an auto-incremented id.
    */
   function send(event, data) {
@@ -73,9 +88,9 @@ export function createSse(res, options = {}) {
     return true;
   }
 
-  /** Gracefully finishes the stream (marks closed, does not force-end res). */
+  /** Gracefully finishes the stream and closes the response. */
   function end() {
-    closed = true;
+    close();
   }
 
   /**
@@ -84,7 +99,7 @@ export function createSse(res, options = {}) {
    */
   function error(payload) {
     send(SSE_EVENT.ERROR, payload);
-    closed = true;
+    close();
   }
 
   return {

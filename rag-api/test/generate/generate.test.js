@@ -18,8 +18,10 @@ function makeSink() {
     frames,
     head: null,
     destroyed: false,
+    ended: false,
     writeHead(status, headers) { this.head = { status, headers }; },
     write(str) { frames.push(String(str)); return true; },
+    end() { this.ended = true; },
   };
 }
 
@@ -108,6 +110,17 @@ describe('Step 5.1 — SSE endpoint framing', () => {
     expect(sink.head.status).toBe(200); // still 200, never 500 mid-stream
     const frames = parseFrames(sink.frames);
     expect(frames.at(-1).event).toBe('error');
+    // The response MUST be ended so the browser ReadableStream gets EOF/done.
+    expect(sink.ended).toBe(true);
+  });
+
+  it('end() terminates the response so the client stream closes (browser EOF)', () => {
+    const sink = makeSink();
+    const sse = createSse(sink);
+    sse.send('token', { text: 'x' });
+    sse.end();
+    expect(sink.ended).toBe(true);
+    expect(sse.isClosed()).toBe(true);
   });
 });
 
