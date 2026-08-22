@@ -26,6 +26,8 @@ export const SSE_EVENT = Object.freeze({
  * @param {object} res  response sink (see module header).
  * @param {object} [options]
  * @param {() => number} [options.idFactory]  returns the next event id (tests inject a fixed source).
+ * @param {Record<string,string>} [options.extraHeaders]  extra response headers merged into the SSE head
+ *        (e.g. CORS `Access-Control-Allow-Origin` when a separate frontend origin calls this endpoint).
  * @returns {object} `{ send, sendRaw, end, error, get nextId, get destroyed }`.
  */
 export function createSse(res, options = {}) {
@@ -40,6 +42,7 @@ export function createSse(res, options = {}) {
       'Cache-Control': 'no-cache',
       Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
+      ...(options.extraHeaders || {}),
     });
     writeHeadDone = true;
   }

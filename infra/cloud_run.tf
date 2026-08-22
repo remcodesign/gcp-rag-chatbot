@@ -44,7 +44,7 @@ resource "google_cloud_run_service" "api" {
         }
       }
 
-      service_account_name = google_service_account.api.email
+service_account_name = google_service_account.api.email
     }
   }
 
@@ -57,6 +57,53 @@ resource "google_cloud_run_service" "api" {
 # Demo: public. Switch to allAuthenticatedUsers + Identity Platform for prod.
 resource "google_cloud_run_service_iam_member" "public" {
   service  = google_cloud_run_service.api.name
+  location  = var.region
+  role      = "roles/run.invoker"
+  member    = "allUsers"
+}
+
+# --- Frontend: the separate static site (Cloud Run Service) ---
+# Serves the built Vue 3 app from `frontend/dist` via nginx.
+resource "google_cloud_run_service" "frontend" {
+  name     = "rag-frontend"
+  location = var.region
+  # Ordering so a fresh `terraform apply` can recreate the deploy role from a blank
+  # project; also so `terraform destroy` drops the static site before the runner role.
+  depends_on = [google_project_iam_member.terraform_runner_run_admin]
+
+  template {
+    metadata {
+      annotations = {
+        # Cheap stickiness: prefer the same instance while warm.
+        "run.googleapis.com/sessionAffinity" = "true"
+      }
+    }
+    spec {
+      # Static files -> many concurrent lightweight requests per instance.
+      container_concurrency = 1000
+
+      timeout_seconds = 300
+
+      containers {
+        image = local.frontend_image
+        ports {
+          container_port = 8080
+        }
+      }
+
+      service_account_name = google_service_account.api.email
+    }
+  }
+
+  traffic {
+    latest_revision = true
+    percent         = 100
+  }
+}
+
+# Demo: public. Switch to allAuthenticatedUsers + Identity Platform for prod.
+resource "google_cloud_run_service_iam_member" "frontend_public" {
+  service  = google_cloud_run_service.frontend.name
   location = var.region
   role     = "roles/run.invoker"
   member   = "allUsers"

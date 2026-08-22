@@ -28,10 +28,12 @@ import { createSse } from '../lib/generate/sse.js';
 import { createChatBridge } from '../lib/generate/chatBridge.js';
 import { createOpenRouterEmbedder } from '../lib/rag/openRouterEmbedder.js';
 import { createHealth } from '../lib/health.js';
+import { corsHeaders, handlePreflight } from '../lib/cors.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
-const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-4o-mini';
+// const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-oss-120b';
+const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-oss-20b';
 
 function createRuntime() {
   const firestore = new Firestore();
@@ -46,7 +48,7 @@ function createRuntime() {
    * Minimal SSE handler for POST /sessions/:id/messages.
    */
   async function handleSse(req, res, sessionId) {
-    const sse = createSse(res);
+    const sse = createSse(res, { extraHeaders: corsHeaders() });
     let body = '';
     for await (const chunk of req) body += chunk;
     let payload;
@@ -66,6 +68,10 @@ function createRuntime() {
 
   async function route(req, res) {
     const url = new URL(req.url, `http://${req.headers.host ?? 'localhost'}`);
+
+    // CORS preflight (browser sends OPTIONS before the SSE POST from the
+    // separately-hosted frontend origin). Short-circuit with a 204.
+    if (handlePreflight(req, res)) return;
 
     if (req.method === 'POST' && url.pathname.startsWith('/sessions/')) {
       const sessionId = url.pathname.replace(/^\/sessions\//, '').replace(/\/messages$/, '');

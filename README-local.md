@@ -20,7 +20,13 @@ now lets build and document `docs`:
 >
 > **VERY IMPORTANT — Do not use GIT commit and push yourself - only use GIT for checking state and history:**
 
-### 1.1 Load project context
+### 1.1 Read Project Instructions
+
+```txt
+.github/instructions/workspace.instructions.md
+```
+
+### 1.2 Load project context
 
 Read the full build spec first — it is the single source of truth for this greenfield project:
 
@@ -38,7 +44,7 @@ docs/1-1-idea-specs.md
 docs/1-1-domain-X-XXX.md.  
 ```
 
-### 1.2 Extra Documentation
+### 1.3 Extra Documentation
 
 Use the tool `context 7` for more indepth documentation about any of the project subjects.
 

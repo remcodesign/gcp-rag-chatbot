@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # ---------------------------------------------------------------------------
-# deploy.sh — build + push the two Cloud Run container images to Artifact
+# deploy.sh — build + push the Cloud Run container images to Artifact
 # Registry, then optionally terraform plan/apply.
 #
-# The Cloud Run Service (`rag-api`) and Job (`rag-ingest`) reference these images:
+# The Cloud Run Service (`rag-api`), Job (`rag-ingest`) and the frontend
+# Service (`rag-frontend`) reference these images:
 #   ${REGION}-docker.pkg.dev/${PROJECT_ID}/rag/rag-api:latest
 #   ${REGION}-docker.pkg.dev/${PROJECT_ID}/rag/rag-ingest:latest
+#   ${REGION}-docker.pkg.dev/${PROJECT_ID}/rag/rag-frontend:latest
 #
 # Usage:
 #   ./deploy.sh build           # build both images (no push)
@@ -60,12 +62,18 @@ build_image() {
   local dir="$1" name="$2"
   local img="${IMAGE_PREFIX}/${name}:${IMAGE_TAG}"
   echo "==> Building ${img} from ${dir}/"
+  # Optional build arg for the frontend: the SSE backend origin baked into the
+  # bundle (frontend + backend are separate Cloud Run Services).
+  local build_args=()
+  if [[ -n "${VITE_API_BASE:-}" ]]; then
+    build_args+=(--build-arg "VITE_API_BASE=$VITE_API_BASE")
+  fi
   # Build + push in one step so the tagged image is in Artifact Registry.
   if docker buildx version >/dev/null 2>&1; then
     docker buildx build --platform "$PLATFORM" --push \
-      --tag "$img" "$ROOT/$dir"
+      "${build_args[@]}" --tag "$img" "$ROOT/$dir"
   else
-    docker build --platform "$PLATFORM" --tag "$img" "$ROOT/$dir"
+    docker build --platform "$PLATFORM" "${build_args[@]}" --tag "$img" "$ROOT/$dir"
     docker push "$img"
   fi
   echo "$img"
@@ -74,6 +82,7 @@ build_image() {
 build_all() {
   build_image rag-api rag-api
   build_image rag-ingest rag-ingest
+  build_image frontend rag-frontend
 }
 
 push_all() {

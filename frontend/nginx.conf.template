@@ -1,0 +1,26 @@
+# nginx server block for the static Vue 3 chat frontend (rag-frontend).
+# The Dockerfile CMD runs envsubst, substituting ${PORT} into this template to
+# produce /etc/nginx/conf.d/default.conf. Cloud Run injects $PORT at deploy
+# time; the Dockerfile sets PORT=8080 as a default for local runs.
+
+server {
+    listen ${PORT};
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # SPA fallback: any non-asset path serves index.html so refreshes/deep links work.
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Vite emits hashed, immutable asset filenames — cache hard.
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    # The UI calls rag-api (Node) on a DIFFERENT origin, so CORS applies.
+    # Nothing is reverse-proxied here.
+}
