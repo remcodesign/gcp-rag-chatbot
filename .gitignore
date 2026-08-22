@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Node.js
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+dist/
+coverage/
+*.tsbuildinfo
+
+# Environment / secrets — never commit keys
+.env
+.env.*
+!.env.example
+
+# Terraform
+infra/.terraform/
+infra/.terraform.lock.hcl.bak
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Cloud / GCP
+gcloud/
+*.gke.backup
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Logs
+logs/
+*.log
+
+
+# docs
+docs/
