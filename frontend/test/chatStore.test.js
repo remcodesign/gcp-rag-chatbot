@@ -34,6 +34,20 @@ describe('chatStore — streaming (Step 6.1)', () => {
     expect(store.state.status).toBe(STATUS.DONE);
   });
 
+  it('parses frames with the DEFAULT parser (regression: no-op default bug)', async () => {
+    // The store used to default to a stub `{ parseSse: () => ({frames:[],rest:b}) }`,
+    // which ate every chunk and left the UI stuck on the first progress stage.
+    // WITHOUT passing `parser`, the real sseParser must be used so frames apply.
+    const send = makeSend([
+      [progress(1, STAGES.RETRIEVAL, 40), token(2, 'Hello '), done(3)],
+    ]);
+    const store = createChatStore({ send }); // no parser injected
+    await store.sendMessage({ sessionId: 's1', query: 'hi' });
+    expect(store.state.answer).toBe('Hello ');
+    expect(store.state.progress).toBe(40);
+    expect(store.state.status).toBe(STATUS.DONE);
+  });
+
   it('exposes reactive state so the Vue UI re-renders on mutations', async () => {
     // Regression guard: store.state must be a Vue reactive proxy. If it were a
     // plain object, computed refs in App.vue would never update and the chat

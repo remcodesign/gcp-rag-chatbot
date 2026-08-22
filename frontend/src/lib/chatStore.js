@@ -19,6 +19,7 @@
  */
 
 import { reactive } from 'vue';
+import { parseSse } from './sseParser.js';
 
 /** Stage labels mirrored from the backend `STAGES`. */
 export const STAGES = Object.freeze({
@@ -59,7 +60,10 @@ const RETRY_BASE_MS = 500;
  */
 export function createChatStore(deps, options = {}) {
   const { send } = deps;
-  const parser = deps.parser ?? { parseSse: (b) => ({ frames: [], rest: b }) };
+  // Default to the REAL SSE parser. A no-op default here was a silent bug:
+  // frames were swallowed and the UI stayed stuck at the first progress stage.
+  // Tests may inject a fake parser, but production wiring must not rely on that.
+  const parser = deps.parser ?? { parseSse };
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryBaseMs = options.retryBaseMs ?? RETRY_BASE_MS;
 
