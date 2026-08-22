@@ -163,6 +163,30 @@ class FakeTransaction {
 }
 
 /**
+ * A batched write object (used by the seed job in Domain 4). Mirrors the real
+ * `WriteBatch` surface: `.set(ref, data, { merge })` accumulates, `.commit()`
+ * applies atomically.
+ */
+class FakeWriteBatch {
+  constructor(owner) {
+    this._owner = owner;
+    this.ops = [];
+  }
+
+  set(ref, data, opts = {}) {
+    this.ops.push({ kind: 'set', path: ref._path, data, merge: !!opts.merge });
+    return this;
+  }
+
+  async commit() {
+    for (const op of this.ops) {
+      this._owner.set(op.path, op.data, { merge: op.merge });
+    }
+    this.ops = [];
+  }
+}
+
+/**
  * Creates an in-memory Firestore fake.
  *
  * @returns {{ collection: Function, runTransaction: Function, store: Map, autoId: Function }}
@@ -235,6 +259,10 @@ export function createFakeFirestore() {
     collection(path) {
       const segments = Array.isArray(path) ? path : [path];
       return new FakeCollectionRef(segments, this);
+    },
+
+    batch() {
+      return new FakeWriteBatch(this);
     },
 
     async runTransaction(fn) {
