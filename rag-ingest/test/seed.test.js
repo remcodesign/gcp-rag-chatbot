@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { parseSource } from '../lib/frontmatter.js';
 import { chunkText, hashText } from '../lib/chunker.js';
 import { readManifest, checkSeedNeeded, writeManifest } from '../lib/manifest.js';
-import { runSeed } from '../lib/orchestrate.js';
+import { runSeed, CURRENT_VERSION } from '../lib/orchestrate.js';
 import { createFakeFirestore } from './fakes/fakeFirestore.js';
 
 const SAMPLE = `---
@@ -147,7 +147,7 @@ describe('Step 4.5 — manifest finalization', () => {
       { id: 'b', content: SAMPLE },
     ] });
     const manifest = await readManifest(fs);
-    expect(manifest.version).toBe('1');
+    expect(manifest.version).toBe(CURRENT_VERSION);
     expect(manifest.chunkCount).toBeGreaterThan(0);
     expect(manifest.dims).toBe(1536);
     expect(manifest.model).toBe('openai/text-embedding-3-small');
