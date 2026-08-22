@@ -18,6 +18,9 @@ COPY src ./src
 COPY corpus ./corpus
 
 # The Job runs to completion; defaults CORPUS_DIR to the baked-in corpus.
-ENV CORPUS_DIR=/corpus
+# Corpus is COPYed to /app/corpus (WORKDIR=/app), so all CORPUS_DIR values
+# must point there — Dockerfile ENV, cli.js default, and the Job env in
+# infra/cloud_run.tf must agree.
+ENV CORPUS_DIR=/app/corpus
 USER node
 CMD ["node", "src/cli.js"]

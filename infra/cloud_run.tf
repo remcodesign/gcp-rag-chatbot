@@ -103,7 +103,7 @@ resource "google_cloud_run_v2_job" "ingest" {
 
         env {
           name  = "CORPUS_DIR"
-          value = "/corpus"
+          value = "/app/corpus"
         }
       }
     }

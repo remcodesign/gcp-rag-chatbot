@@ -12,7 +12,7 @@ import { runSeed } from '../lib/orchestrate.js';
 import { loadSources } from '../lib/loadSources.js';
 import { createOpenRouterEmbedder } from '../lib/openRouterEmbedder.js';
 
-const CORPUS_DIR = process.env.CORPUS_DIR ?? '/corpus';
+const CORPUS_DIR = process.env.CORPUS_DIR ?? '/app/corpus';
 
 /**
  * Returns the production OpenRouter embedding adapter (Node fetch). The API key

@@ -247,3 +247,19 @@ gcloud run jobs execute rag-ingest --region=europe-west4
 >    seeded" and skips — even though nothing is in the `chunks` collection.
 >    Bump `CURRENT_VERSION` in `rag-ingest/lib/orchestrate.js` to force a real
 >    re-seed, commit, push, apply, then execute the job again.
+
+> **Why `./deploy.sh plan` says "No changes" even after you edited code/corpus**
+> — **commit first.** `deploy.sh` tags the image with the **current git short
+> SHA of HEAD** (`git rev-parse --short HEAD`), not your working tree. If your
+> edits are uncommitted, HEAD is unchanged, so the pushed tag equals the
+> already-applied tag → the HCL image reference string is identical → Terraform
+> has nothing to roll and reports `No changes`. The tag only advances when HEAD
+> becomes a *new commit*:
+>
+> ```bash
+> git add -A && git commit -m "your change"   # SHA now bumps (e.g. 291ee27 -> b7c3f19)
+> ./deploy.sh plan                           # now expect "2 to change" (Service + Job)
+> ```
+>
+> So the golden rule for **any** release: commit (bump the SHA) → push/plan →
+> apply → (for corpus changes) execute the seed job.
