@@ -237,4 +237,24 @@ describe('Pipeline integration', () => {
     expect(result.timedOut).toBe(true);
     expect(result.context).toBe('');
   });
+
+  it('exposes the raw retrieval ranking and stage timings for the RAG trace', async () => {
+    const fs = createFakeFirestore();
+    seedChunks(fs);
+    const pipeline = createPipeline(
+      { firestore: fs, embeddings: embedIdentity, reranker: { rerank: async (_q, h) => h } },
+      { confidenceThreshold: 0.99 }, // threshold high so rerank runs (confirming didRerank path)
+    );
+    const result = await pipeline.run('what is the return policy?');
+    // retrievalHits is the pre-rerank findNearest ranking.
+    expect(Array.isArray(result.retrievalHits)).toBe(true);
+    expect(result.retrievalHits.length).toBeGreaterThan(0);
+    expect(result.retrievalHits[0]).toHaveProperty('similarityScore');
+    expect(result.retrievalHits[0]).toHaveProperty('text');
+    // timings cover the re-usable stage breakdown for the trace sidebar.
+    expect(result.timings).toBeDefined();
+    expect(typeof result.timings.retrieval).toBe('number');
+    expect(typeof result.timings.total).toBe('number');
+    expect(result.retrievalHits[0].id).toBe('returns-01'); // nearest-first
+  });
 });

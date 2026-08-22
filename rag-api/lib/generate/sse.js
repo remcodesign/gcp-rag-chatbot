@@ -18,6 +18,7 @@ export const SSE_EVENT = Object.freeze({
   TOKEN: 'token',
   ERROR: 'error',
   DONE: 'done',
+  TRACE: 'trace',
 });
 
 /**

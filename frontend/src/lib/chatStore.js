@@ -77,6 +77,7 @@ export function createChatStore(deps, options = {}) {
     answer: '',
     citations: [], // running validated citations [{ n, title }]
     sources: [], // final source list [{ n, title, url, id }]
+    trace: null, // last RAG "inner workings" payload ({ retrieved, rerank, context, finalPrompt, ... })
     error: null,
     lastEventId: null,
     retryCount: 0,
@@ -116,6 +117,10 @@ export function createChatStore(deps, options = {}) {
         state.sources = frame.data && frame.data.sources ? frame.data.sources : [];
         state.status = STATUS.DONE;
         break;
+      case 'trace':
+        // POC: keep the RAG inner-workings payload so the sidebar can render it.
+        state.trace = frame.data;
+        break;
       case 'error':
         state.error = frame.data && frame.data.message ? frame.data.message : 'generation interrupted';
         state.status = STATUS.ERROR;
@@ -132,6 +137,7 @@ export function createChatStore(deps, options = {}) {
       sessionId,
       query,
       lastEventId: state.lastEventId,
+      trace: options.trace ?? true,
       signal: controller.signal,
     });
 
@@ -159,6 +165,7 @@ export function createChatStore(deps, options = {}) {
     state.answer = '';
     state.citations = [];
     state.sources = [];
+    state.trace = null;
     state.error = null;
     state.retryCount = 0;
     state.lastEventId = null;
@@ -208,6 +215,7 @@ export function createChatStore(deps, options = {}) {
     state.answer = '';
     state.citations = [];
     state.sources = [];
+    state.trace = null;
     state.error = null;
     state.lastEventId = null;
     state.retryCount = 0;

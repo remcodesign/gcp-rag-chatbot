@@ -24,6 +24,7 @@ import { SSE_EVENT } from './sse.js';
 import { normalizeError } from './chatBridge.js';
 import { readDelta } from './readDelta.js';
 import { validateCitations, listSources } from './citations.js';
+import { buildTrace } from './trace.js';
 
 /** Stage labels mirrored to the client for the progress UI. */
 export const STAGES = Object.freeze({
@@ -113,13 +114,13 @@ export function createGenerator(deps, options = {}) {
   async function streamAnswer({ sse, sessionId, query, options = {} }) {
     sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RETRIEVAL, progress: 40 });
 
-    let runOutcome = { sourceMap: {}, context: '', sources: [] };
+    let runOutcome = { sourceMap: {}, context: '', sources: [], retrievalHits: [] };
     try {
       runOutcome = await pipeline.run(query, { history: options.history });
     } catch (err) {
       // Retrieval failure: still answer, just without context (graceful degrade).
       logger.warn(`retrieval failed for ${sessionId}: ${err.message}`);
-      runOutcome = { sourceMap: {}, context: '', sources: [] };
+      runOutcome = { sourceMap: {}, context: '', sources: [], retrievalHits: [] };
     }
 
     sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RERANK, progress: 60 });
@@ -132,6 +133,17 @@ export function createGenerator(deps, options = {}) {
       context: runOutcome.context || '',
       user: query,
     });
+
+    // POC supportability: surface the RAG "inner workings" to the client — the
+    // raw retrieval ranking, the rerank decision, the resulting context, and the
+    // final prompt sent to the LLM. Optional and best-effort.
+    if (options.trace) {
+      try {
+        sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages }));
+      } catch (err) {
+        logger.warn(`trace serialization failed for ${sessionId}: ${err.message}`);
+      }
+    }
 
     let partialText = '';
     let citations = [];

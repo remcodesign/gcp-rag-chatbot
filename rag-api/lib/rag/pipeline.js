@@ -40,41 +40,60 @@ export function createPipeline(deps, options = {}) {
    * @param {string}  [opts.rewrittenQuery]  if the caller already rewrote an
    *   ambiguous query, pass the rewritten text; the classifier result is then
    *   informational only.
-   * @returns {Promise<object>} `{ query, hits, sourceMap, context, sources,
-   *   classification, rerankInfo, timedOut }`
+   * @returns {Promise<object>} `{ query, hits, retrievalHits, sourceMap, context,
+   *   sources, classification, rerankInfo, timings, timedOut }`
+   *
+   * `retrievalHits` is the raw `findNearest` ranking (each hit carries the
+   * Firestore `similarityScore` + `id`/`title`/`url`/`text`) and `hits` is the
+   * post-rerank list — the RAG-trace feature surfaces both so the client can
+   * show what was found vs. what the LLM saw in its context window.
    */
   async function run(query, { history = [], rewrittenQuery } = {}) {
+    const t0 = Date.now();
     const classification = classifyQuery(query, { history });
 
     const effectiveQuery = rewrittenQuery ?? query;
     const embedResult = await retriever.embedAndRetrieve(effectiveQuery, {
       embedTimeoutMs: options.embedTimeoutMs,
     });
+    const t1 = Date.now();
     if (embedResult.timedOut) {
       return {
         query,
         hits: [],
+        retrievalHits: [],
         sourceMap: {},
         context: '',
         sources: [],
         classification,
         rerankInfo: null,
+        timings: { embed: t1 - t0, retrieval: 0, rerank: 0, total: t1 - t0 },
         timedOut: true,
         rewriteRequested: classification.rewrite,
       };
     }
 
-    const rerankOutcome = await reranker.rerank(effectiveQuery, embedResult.hits);
+    const retrievalHits = embedResult.hits;
+    const rerankOutcome = await reranker.rerank(effectiveQuery, retrievalHits);
+    const t2 = Date.now();
     const context = buildContext(rerankOutcome.hits);
+    const t3 = Date.now();
 
     return {
       query,
       hits: rerankOutcome.hits,
+      retrievalHits,
       sourceMap: context.sourceMap,
       context: context.context,
       sources: context.sources,
       classification,
       rerankInfo: { didRerank: rerankOutcome.didRerank, reason: rerankOutcome.reason },
+      timings: {
+        embed: t1 - t0,
+        retrieval: t2 - t1,
+        rerank: t3 - t2,
+        total: t3 - t0,
+      },
       timedOut: false,
       rewriteRequested: classification.rewrite,
     };

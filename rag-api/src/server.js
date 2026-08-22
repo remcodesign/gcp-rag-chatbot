@@ -63,7 +63,14 @@ function createRuntime() {
       sse.error({ message: 'query is required' });
       return;
     }
-    await generator.streamAnswer({ sse, sessionId, query, options: payload.options ?? {} });
+    // Merge the caller's explicit options; a top-level `trace` boolean (sent by
+    // the frontend transport) is folded in so the generator can emit the RAG
+    // trace event for the "inner workings" sidebar.
+    const options = { ...(payload.options ?? {}) };
+    if (payload.trace !== undefined && options.trace === undefined) {
+      options.trace = payload.trace;
+    }
+    await generator.streamAnswer({ sse, sessionId, query, options });
   }
 
   async function route(req, res) {

@@ -21,3 +21,18 @@ export function resolveApiBase() {
   }
   return '';
 }
+
+/**
+ * Whether the RAG "inner workings" trace should be requested from the backend.
+ * This is a POC, so the trace is on by default; turn it off in builds that
+ * don't want the extra SSE payload.
+ */
+export function resolveTraceEnabled() {
+  if (typeof window !== 'undefined' && window.__RAG_TRACE__ !== undefined) {
+    return !!window.__RAG_TRACE__;
+  }
+  if (import.meta.env && import.meta.env.VITE_RAG_TRACE !== undefined) {
+    return import.meta.env.VITE_RAG_TRACE === 'true';
+  }
+  return true;
+}

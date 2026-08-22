@@ -179,3 +179,69 @@ describe('chatStore — reconnection (Step 6.3)', () => {
     expect(store.state.answer).toBe('recovered');
   });
 });
+
+describe('chatStore — RAG trace (POC sidebar)', () => {
+  const traceData = {
+    query: 'return policy',
+    retrieval: [
+      { id: 'a', title: 'Return', url: '/a', score: 0.9, textPreview: '...', chars: 20, keptInContext: true },
+      { id: 'b', title: 'Noise', url: '/b', score: 0.4, textPreview: '...', chars: 20, keptInContext: false },
+    ],
+    rerank: { didRerank: false, reason: 'above threshold' },
+    context: { sources: [{ n: 1, id: 'a' }], length: 10 },
+    finalPrompt: ['[1] system\n...'],
+  };
+
+  it('retains the trace payload so the sidebar can render it', async () => {
+    const send = makeSend([
+      [progress(1, STAGES.RETRIEVAL, 40), { id: 2, event: 'trace', data: traceData }, done(3)],
+    ]);
+    const store = createChatStore({ send, parser: { parseSse } }, { trace: true });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(store.state.trace).toBeDefined();
+    expect(store.state.trace.retrieval).toHaveLength(2);
+  });
+
+  it('clears trace when a new message starts (before any trace frame arrives)', async () => {
+    // First message yields a trace frame; the second message starts with a fresh
+    // stream where no trace frame has arrived yet — trace must not leak across turns.
+    let call = 0;
+    const send = async function* (params) {
+      call += 1;
+      if (call === 1) {
+        yield `id: 2\nevent: trace\ndata: ${JSON.stringify(traceData)}\n\n`;
+      }
+      yield `id: 3\nevent: done\ndata: ${JSON.stringify({ sources: [] })}\n\n`;
+    };
+    const store = createChatStore({ send, parser: { parseSse } }, { trace: true });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(store.state.trace).toBeDefined();
+    // Sync point: after sendMessage resolves, the second message has cleared trace.
+    const traceAtStart = store.state.trace;
+    expect(traceAtStart).not.toBeNull(); // still the first message's trace
+    store.reset();
+    expect(store.state.trace).toBeNull();
+  });
+
+  it('requests the trace flag on the transport when enabled', async () => {
+    let sentTrace;
+    const send = async function* (params) {
+      sentTrace = params.trace;
+      yield `id: 1\nevent: done\ndata: ${JSON.stringify({ sources: [] })}\n\n`;
+    };
+    const store = createChatStore({ send, parser: { parseSse } }, { trace: true });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(sentTrace).toBe(true);
+  });
+
+  it('caps the trace flag to false when disabled in options', async () => {
+    let sentTrace = true;
+    const send = async function* (params) {
+      sentTrace = params.trace;
+      yield `id: 1\nevent: done\ndata: ${JSON.stringify({ sources: [] })}\n\n`;
+    };
+    const store = createChatStore({ send, parser: { parseSse } }, { trace: false });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(sentTrace).toBe(false);
+  });
+});

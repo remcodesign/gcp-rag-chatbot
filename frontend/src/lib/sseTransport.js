@@ -18,13 +18,14 @@
  * @param {string} params.sessionId
  * @param {string} params.query
  * @param {number|null} params.lastEventId  resume point (Last-Event-ID).
+ * @param {boolean} [params.trace]  ask the backend to attach the RAG "inner workings" payload.
  * @param {AbortSignal} params.signal
  * @param {object} [options]
  * @param {string} [options.baseUrl]  backend origin (defaults to same-origin).
  * @returns {AsyncIterable<string>} raw SSE text chunks.
  */
 export async function* openSseStream(params, options = {}) {
-  const { sessionId, query, lastEventId, signal } = params;
+  const { sessionId, query, lastEventId, signal, trace } = params;
   const baseUrl = options.baseUrl ?? '';
   const url = `${baseUrl}/sessions/${encodeURIComponent(sessionId)}/messages`;
 
@@ -34,7 +35,7 @@ export async function* openSseStream(params, options = {}) {
       'Content-Type': 'application/json',
       ...(lastEventId != null ? { 'Last-Event-ID': String(lastEventId) } : {}),
     },
-    body: JSON.stringify({ query }),
+    body: JSON.stringify({ query, trace: !!trace }),
     signal,
   });
 

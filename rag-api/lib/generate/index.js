@@ -11,6 +11,7 @@ export { createSse, SSE_EVENT } from './sse.js';
 export { createChatBridge, normalizeError } from './chatBridge.js';
 export { readDelta } from './readDelta.js';
 export { validateCitations, normalizeSourceToken, listSources } from './citations.js';
+export { buildTrace, serializeHit, preview } from './trace.js';
 export {
   createGenerator,
   buildMessages,

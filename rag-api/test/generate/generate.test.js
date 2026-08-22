@@ -291,3 +291,58 @@ describe('Step 5.4 — mid-stream failure: context-assisted regeneration', () =>
     expect(regen.at(-1).content).toContain('Continue');
   });
 });
+
+// ---------------------------------------------------------------------------
+// RAG trace (POC supportability) — the frontend "inner workings" sidebar
+// ---------------------------------------------------------------------------
+
+describe('RAG trace event (POC sidebar data)', () => {
+  it('emits a trace event with retrieval + final prompt when options.trace is set', async () => {
+    const pipeline = {
+      run: async () => ({
+        query: 'return policy',
+        retrievalHits: [
+          { id: 'returns-01', title: 'Return policy', url: '/help/returns', text: 'You can return within 30 days.', similarityScore: 0.9 },
+          { id: 'warranty-01', title: 'Warranty', url: '/help/warranty', text: 'The warranty covers defects.', similarityScore: 0.5 },
+        ],
+        sourceMap: { 1: { title: 'Return policy', url: '/help/returns', id: 'returns-01' } },
+        context: '[Source 1] You can return within 30 days.',
+        sources: [{ number: 1, title: 'Return policy', url: '/help/returns', id: 'returns-01' }],
+        classification: { rewrite: false, reason: 'self-contained' },
+        rerankInfo: { didRerank: false, reason: 'above threshold' },
+        timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
+        timedOut: false,
+      }),
+    };
+    const sink = makeSink();
+    const sse = createSse(sink);
+    const gen = createGenerator({
+      bridge: staticBridge(streamOf([{ choices: [{ delta: { content: 'answer' } }] }])),
+      pipeline,
+      store: { persistMessage: async () => {} },
+    });
+    await gen.streamAnswer({ sse, sessionId: 's', query: 'return policy', options: { trace: true } });
+
+    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+    expect(traceFrames).toHaveLength(1);
+    const data = traceFrames[0].data;
+    expect(data.retrieved).toHaveLength(2);
+    expect(data.retrieved[0].keptInContext).toBe(true); // in context window
+    expect(data.retrieved[1].keptInContext).toBe(false); // dropped
+    expect(data.finalPrompt).toBeDefined();
+    expect(JSON.stringify(data.finalPrompt)).toContain('return policy');
+  });
+
+  it('does not emit a trace event when options.trace is not requested', async () => {
+    const sink = makeSink();
+    const sse = createSse(sink);
+    const gen = createGenerator({
+      bridge: staticBridge(streamOf([])),
+      pipeline: stalePipeline(),
+      store: { persistMessage: async () => {} },
+    });
+    await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: {} });
+    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+    expect(traceFrames).toHaveLength(0);
+  });
+});

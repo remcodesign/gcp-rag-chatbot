@@ -3,13 +3,21 @@ import { ref, computed } from 'vue';
 import { createChatStore, STAGE_LABELS, STATUS } from './lib/chatStore.js';
 import { openSseStream } from './lib/sseTransport.js';
 import { renderAnswer, buildSourceChips } from './lib/citations.js';
-import { resolveApiBase } from './lib/config.js';
+import { resolveApiBase, resolveTraceEnabled } from './lib/config.js';
+import { normalizeTrace, formatScore } from './lib/trace.js';
+
+// RAG "inner workings" sidebar (POC). The chatStore retains the backend `trace`
+// payload when the request asks for it (default on). The sidebar is just a
+// closable panel that renders `store.state.trace` — no extra network.
+const showTracePanel = ref(false);
 
 // One store per app instance. The transport is the real fetch+ReadableStream
 // consumer; the store drives progress, tokens, reconnection and citations.
 // The backend origin comes from runtime config (separate Cloud Run service).
 const store = createChatStore({
   send: (params) => openSseStream(params, { baseUrl: resolveApiBase() }),
+}, {
+  trace: resolveTraceEnabled(),
 });
 
 const input = ref('');
@@ -23,6 +31,7 @@ const progress = computed(() => store.state.progress);
 const answerHtml = computed(() => renderAnswer(store.state.answer));
 const chips = computed(() => buildSourceChips(store.state.sources));
 const error = computed(() => store.state.error);
+const trace = computed(() => normalizeTrace(store.state.trace));
 
 const isStreaming = computed(() => status.value === STATUS.STREAMING);
 const isDone = computed(() => status.value === STATUS.DONE);
@@ -46,56 +55,139 @@ function newSession() {
 </script>
 
 <template>
-  <main class="chat">
-    <header class="chat__header">
-      <h1>Northwind Outfitters — Support Chat</h1>
-      <button class="chat__new" @click="newSession" :disabled="isStreaming">New session</button>
-    </header>
+  <main class="layout" :class="{ 'layout--has-trace': showTracePanel }">
+    <!-- Chat column -->
+    <div class="layout__main">
+      <header class="chat__header">
+        <h1>Northwind Outfitters — Support Chat</h1>
+        <div class="chat__header-actions">
+          <button
+            class="chat__new trace-toggle"
+            @click="showTracePanel = !showTracePanel"
+            :aria-expanded="showTracePanel"
+          >
+            <span class="trace-toggle__dot" aria-hidden="true"></span>
+            {{ showTracePanel ? 'Hide RAG trace' : 'RAG trace' }}
+          </button>
+          <button class="chat__new" @click="newSession" :disabled="isStreaming">New session</button>
+        </div>
+      </header>
 
-    <!-- Progress indicator (Step 6.2) -->
-    <div v-if="isStreaming" class="progress" role="status" aria-live="polite">
-      <span class="progress__label">{{ stageLabel }}</span>
-      <span class="progress__bar"><span :style="{ width: progress + '%' }"></span></span>
-    </div>
-
-    <!-- Error banner (Step 6.1 non-happy) -->
-    <div v-if="isError" class="error-banner" role="alert">
-      <p>{{ error }}</p>
-      <button @click="retry">Retry</button>
-    </div>
-
-    <section class="chat__body">
-      <div v-if="!store.state.answer && !isStreaming" class="chat__empty">
-        Ask about returns, warranty, sizing, or product setup.
+      <!-- Progress indicator (Step 6.2) -->
+      <div v-if="isStreaming" class="progress" role="status" aria-live="polite">
+        <span class="progress__label">{{ stageLabel }}</span>
+        <span class="progress__bar"><span :style="{ width: progress + '%' }"></span></span>
       </div>
 
-      <!-- Streamed answer with inline citations (Step 6.1 + 6.4) -->
-      <div v-if="store.state.answer" class="answer" v-html="answerHtml"></div>
-
-      <!-- Source chips (Step 6.4) -->
-      <div v-if="chips.length" class="sources">
-        <span class="sources__label">Sources</span>
-        <a
-          v-for="c in chips"
-          :key="c.n"
-          class="chip"
-          :href="c.url"
-          target="_blank"
-          rel="noopener"
-          :title="c.title"
-        >[Source {{ c.n }}] {{ c.title }}</a>
+      <!-- Error banner (Step 6.1 non-happy) -->
+      <div v-if="isError" class="error-banner" role="alert">
+        <p>{{ error }}</p>
+        <button @click="retry">Retry</button>
       </div>
-    </section>
 
-    <form class="chat__input" @submit.prevent="submit">
-      <input
-        v-model="input"
-        type="text"
-        placeholder="Ask a question…"
-        :disabled="isStreaming"
-        autocomplete="off"
-      />
-      <button type="submit" :disabled="isStreaming || !input.trim()">Send</button>
-    </form>
+      <section class="chat__body">
+        <div v-if="!store.state.answer && !isStreaming" class="chat__empty">
+          Ask about returns, warranty, sizing, or product setup.
+        </div>
+
+        <!-- Streamed answer with inline citations (Step 6.1 + 6.4) -->
+        <div v-if="store.state.answer" class="answer" v-html="answerHtml"></div>
+
+        <!-- Source chips (Step 6.4) -->
+        <div v-if="chips.length" class="sources">
+          <span class="sources__label">Sources</span>
+          <a
+            v-for="c in chips"
+            :key="c.n"
+            class="chip"
+            :href="c.url"
+            target="_blank"
+            rel="noopener"
+            :title="c.title"
+          >[Source {{ c.n }}] {{ c.title }}</a>
+        </div>
+      </section>
+
+      <form class="chat__input" @submit.prevent="submit">
+        <input
+          v-model="input"
+          type="text"
+          placeholder="Ask a question…"
+          :disabled="isStreaming"
+          autocomplete="off"
+        />
+        <button type="submit" :disabled="isStreaming || !input.trim()">Send</button>
+      </form>
+    </div>
+    <Transition name="drawer">
+      <aside
+        v-if="showTracePanel"
+        class="trace-panel"
+        aria-label="RAG trace details"
+      >
+        <div class="trace-panel__head">
+          <h2>RAG trace</h2>
+          <button class="trace-panel__close" @click="showTracePanel = false" aria-label="Close RAG trace">×</button>
+        </div>
+        <div class="trace-panel__scroll">
+          <p v-if="!trace" class="trace-panel__empty">
+            No RAG trace yet — ask a question to see retrieval, rerank, context and the final prompt.
+          </p>
+
+          <template v-else>
+            <section class="trace-block">
+              <h3>Query</h3>
+              <p class="trace-query">{{ trace.query }}</p>
+              <p class="trace-meta">Classification: {{ trace.classification }}</p>
+            </section>
+
+            <section class="trace-block">
+              <h3>Retrieval ({{ trace.retrieved.length }})</h3>
+              <ul class="trace-chunks">
+                <li
+                  v-for="c in trace.retrieved"
+                  :key="c.id"
+                  class="trace-chunk"
+                  :class="{ 'is-dropped': !c.keptInContext }"
+                >
+                  <div class="trace-chunk__row">
+                    <span class="trace-chunk__rank">#{{ c.rank }}</span>
+                    <a class="trace-chunk__title" :href="c.url" target="_blank" rel="noopener">{{ c.title }}</a>
+                    <span class="trace-chunk__score">{{ formatScore(c.score) }}</span>
+                  </div>
+                  <div class="trace-chunk__meta">
+                    {{ c.chars }} chars · {{ c.keptInContext ? 'in context' : 'dropped' }}
+                  </div>
+                  <p class="trace-chunk__preview">{{ c.textPreview }}</p>
+                </li>
+              </ul>
+            </section>
+
+            <section class="trace-block">
+              <h3>Rerank</h3>
+              <p class="trace-meta">
+                {{ trace.rerank.didRerank ? 'Reranked' : 'Skipped rerank' }} — {{ trace.rerank.reason }}
+              </p>
+              <p v-if="trace.timings" class="trace-meta">
+                Embed {{ trace.timings.embed }}ms · Retrieve {{ trace.timings.retrieval }}ms ·
+                Rerank {{ trace.timings.rerank }}ms
+              </p>
+            </section>
+
+            <section class="trace-block">
+              <h3>Context passed to LLM ({{ trace.context.sources.length }})</h3>
+              <ol class="trace-context">
+                <li v-for="s in trace.context.sources" :key="s.id">{{ s.id }}</li>
+              </ol>
+            </section>
+
+            <section class="trace-block" v-if="trace.finalPrompt">
+              <h3>Final prompt</h3>
+              <pre class="trace-prompt">{{ trace.finalPrompt }}</pre>
+            </section>
+          </template>
+        </div>
+      </aside>
+    </Transition>
   </main>
 </template>
