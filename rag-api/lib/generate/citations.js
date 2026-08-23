@@ -39,6 +39,7 @@ export function normalizeSourceToken(tok) {
  * @param {string} text        model output that may contain inline citations.
  * @param {object} sourceMap   `{ 1: {title,url,id}, 2: {...} }` from buildContext.
  * @returns {{ text: string, citations: Array<{ n: number, title?: string }> }}
+ */
 export function validateCitations(text, sourceMap = {}) {
   const src = String(text ?? '');
   let out = src;
