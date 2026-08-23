@@ -50,6 +50,7 @@ export function serializeHit(hit = {}, { rank = 0, keptInContext = false } = {})
     category: hit.category || null,
     score: score == null ? null : Number(score.toFixed(4)),
     textPreview: preview(hit.text),
+    text: typeof hit.text === 'string' ? hit.text : '', // full chunk text (for the chunk modal)
     chars: typeof hit.text === 'string' ? hit.text.length : 0,
     keptInContext,
   };

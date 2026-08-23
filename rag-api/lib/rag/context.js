@@ -45,8 +45,11 @@ export function buildContext(hits, { minScore = 0.3, maxSources = 5 } = {}) {
     const n = idx + 1;
     const title = hit.title || 'Untitled source';
     const url = hit.url || '';
-    sourceMap[n] = { title, url, id: hit.id };
-    sources.push({ number: n, title, url, id: hit.id });
+    // Include the chunk text so the frontend can open a citation/chunk in a modal
+    // (instead of navigating to a new page). In-memory map; only surfaced to the
+    // client by listSources / buildTrace.
+    sourceMap[n] = { title, url, id: hit.id, text: hit.text ?? '' };
+    sources.push({ number: n, title, url, id: hit.id, text: hit.text ?? '' });
     lines.push(`[Source ${n}] ${String(hit.text).trim()}`);
   });
 

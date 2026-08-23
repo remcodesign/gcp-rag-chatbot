@@ -37,12 +37,13 @@ export function renderAnswer(text = '', deps) {
  * Builds the clickable source list (chips/footnotes) from the final `sources`
  * array delivered on the `done` event.
  *
- * @param {Array<{n:number,title:string,url:string,id:string}>} sources
- * @returns {Array<{n:number,title:string,url:string,id:string}>} sources with a
- *   usable `url` (falls back to `#` when missing so the chip never breaks).
+ * @param {Array<{n:number,title:string,url:string,id:string,text?:string}>} sources
+ * @returns {Array<{n:number,title:string,url:string,id:string,text:string}>} sources with a
+ *   usable `url` (falls back to `#` when missing so the chip never breaks) and
+ *   a `text` (empty string when absent) for the chunk modal.
  */
 export function buildSourceChips(sources = []) {
   return sources
     .filter((s) => s && s.title)
-    .map((s) => ({ ...s, url: s.url || '#' }));
+    .map((s) => ({ ...s, url: s.url || '#', text: s.text || '' }));
 }

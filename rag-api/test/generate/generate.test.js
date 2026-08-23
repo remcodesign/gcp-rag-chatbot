@@ -207,9 +207,10 @@ describe('Step 5.3 — inline citation generation + validation', () => {
 
   it('listSources maps the numbered map into an ordered list (for chips)', () => {
     const list = listSources(SOURCE_MAP);
+    // `text` is carried through (for the chunk modal) even when absent.
     expect(list).toEqual([
-      { n: 1, title: 'Return policy', url: '/help/returns', id: 'returns-01' },
-      { n: 2, title: 'Warranty overview', url: '/help/warranty', id: 'warranty-01' },
+      { n: 1, title: 'Return policy', url: '/help/returns', id: 'returns-01', text: '' },
+      { n: 2, title: 'Warranty overview', url: '/help/warranty', id: 'warranty-01', text: '' },
     ]);
   });
 });

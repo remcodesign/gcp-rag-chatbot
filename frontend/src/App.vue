@@ -37,6 +37,19 @@ const isStreaming = computed(() => status.value === STATUS.STREAMING);
 const isDone = computed(() => status.value === STATUS.DONE);
 const isError = computed(() => status.value === STATUS.ERROR);
 
+// --- Chunk modal (POC) ------------------------------------------------
+// Opening a source chip / trace hit shows the chunk text in a modal instead of
+// navigating to a new page. `modal` holds the currently selected chunk.
+const modal = ref(null); // { title, url, id, text, score? }
+function openChunk(chunk) {
+  if (!chunk) return;
+  modal.value = { title: chunk.title, url: chunk.url, id: chunk.id, text: chunk.text || '', score: chunk.score };
+}
+function closeChunk() {
+  modal.value = null;
+}
+const modalHtml = computed(() => (modal.value ? renderAnswer(modal.value.text) : ''));
+
 async function submit() {
   const q = input.value.trim();
   if (!q || isStreaming.value) return;
@@ -93,18 +106,17 @@ function newSession() {
         <!-- Streamed answer with inline citations (Step 6.1 + 6.4) -->
         <div v-if="store.state.answer" class="answer" v-html="answerHtml"></div>
 
-        <!-- Source chips (Step 6.4) -->
+        <!-- Source chips (Step 6.4) — click opens the chunk in a modal -->
         <div v-if="chips.length" class="sources">
           <span class="sources__label">Sources</span>
-          <a
+          <button
             v-for="c in chips"
             :key="c.n"
             class="chip"
-            :href="c.url"
-            target="_blank"
-            rel="noopener"
+            type="button"
             :title="c.title"
-          >[Source {{ c.n }}] {{ c.title }}</a>
+            @click="openChunk(c)"
+          >[Source {{ c.n }}] {{ c.title }}</button>
         </div>
       </section>
 
@@ -156,7 +168,7 @@ function newSession() {
                 >
                   <div class="trace-chunk__row">
                     <span class="trace-chunk__rank">#{{ c.rank }}</span>
-                    <a class="trace-chunk__title" :href="c.url" target="_blank" rel="noopener">{{ c.title }}</a>
+                    <button class="trace-chunk__title" type="button" @click="openChunk(c)">{{ c.title }}</button>
                     <span class="trace-chunk__score">{{ formatScore(c.score) }}</span>
                   </div>
                   <div class="trace-chunk__meta">
@@ -193,5 +205,27 @@ function newSession() {
         </div>
       </aside>
     </Transition>
+
+    <!-- Chunk modal (POC): shows the full source chunk when a chip/hit is clicked -->
+    <Teleport to="body">
+      <div v-if="modal" class="modal-overlay" @click.self="closeChunk" role="dialog" aria-modal="true" aria-label="Source chunk">
+        <div class="modal">
+          <div class="modal__head">
+            <h2>{{ modal.title }}</h2>
+            <button class="modal__close" type="button" @click="closeChunk" aria-label="Close">×</button>
+          </div>
+          <div class="modal__body">
+            <p class="modal__meta">
+              <span v-if="modal.score != null">score {{ formatScore(modal.score) }} · </span>
+              <code>{{ modal.id }}</code>
+              <template v-if="modal.url && modal.url !== '#'">
+                · <a :href="modal.url" target="_blank" rel="noopener">open page</a>
+              </template>
+            </p>
+            <div class="answer" v-html="modalHtml"></div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </main>
 </template>

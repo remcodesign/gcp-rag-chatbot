@@ -19,7 +19,7 @@ const SOURCE_RE = /\[source\s*(\d+)\]/gi;
  * reference. Case-insensitive; strips extra surrounding whitespace.
  *
  * @param {string} tok  raw token, e.g. `[SOURCE 3]`.
- * @returns {{ n: number, token: string } | null}
+ * @returns /* {{ n: number, token: string } | null}
  */
 export function normalizeSourceToken(tok) {
   const m = new RegExp(SOURCE_RE.source, 'i').exec(String(tok ?? ''));
@@ -38,8 +38,7 @@ export function normalizeSourceToken(tok) {
  *
  * @param {string} text        model output that may contain inline citations.
  * @param {object} sourceMap   `{ 1: {title,url,id}, 2: {...} }` from buildContext.
- * @returns {{ text: string, citations: Array<{ n: number, title?: string }> }}
- */
+ * @returns {{ text: string, citations: Array<{ n: number, title?: string }> }} */
 export function validateCitations(text, sourceMap = {}) {
   const src = String(text ?? '');
   let out = src;
@@ -73,11 +72,11 @@ export function validateCitations(text, sourceMap = {}) {
  * client can still render references. `full` includes the url (SSE payload);
  * clients decide whether to show it.
  *
- * @param {object} sourceMap  `{ n: {title,url,id} }`.
- * @returns {Array<{ n: number, title: string, url: string, id: string }>}
+ * @param {object} sourceMap  `{ n: {title,url,id,text} }`.
+ * @returns {Array<{ n: number, title: string, url: string, id: string, text?: string }>}
  */
 export function listSources(sourceMap = {}) {
   return Object.entries(sourceMap)
-    .map(([n, s]) => ({ n: Number(n), title: s && s.title, url: s && s.url, id: s && s.id }))
+    .map(([n, s]) => ({ n: Number(n), title: s && s.title, url: s && s.url, id: s && s.id, text: (s && s.text) ?? '' }))
     .filter((s) => s.title);
 }

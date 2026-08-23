@@ -201,8 +201,6 @@ body {
   border-radius: 4px;
   padding: 0 5px;
 }
-.trace-chunk__title { font-size: 13px; font-weight: 600; color: var(--text); text-decoration: none; flex: 1; }
-.trace-chunk__title:hover { text-decoration: underline; }
 .trace-chunk__score { font-size: 12px; font-weight: 600; color: var(--muted); }
 .trace-chunk__meta { font-size: 11px; color: var(--muted); margin: 2px 0; }
 .trace-chunk__preview {
@@ -355,9 +353,26 @@ body {
   border-radius: 999px;
   padding: 4px 12px;
   font-size: 13px;
-  text-decoration: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-family: inherit;
 }
 .chip:hover { text-decoration: underline; }
+
+.trace-chunk__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  flex: 1;
+  font-family: inherit;
+  min-width: 0;
+}
+.trace-chunk__title:hover { text-decoration: underline; color: var(--accent); }
 
 .chat__input {
   display: flex;
@@ -381,3 +396,50 @@ body {
   font-size: 15px;
 }
 .chat__input button:disabled { opacity: 0.5; cursor: default; }
+
+/* ---- Chunk modal (POC) ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 60;
+  padding: 24px;
+}
+.modal {
+  background: var(--panel);
+  border-radius: 12px;
+  width: min(680px, 100%);
+  max-height: 82vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+}
+.modal__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border);
+  flex: none;
+}
+.modal__head h2 { font-size: 16px; margin: 0; }
+.modal__close {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--muted);
+}
+.modal__close:hover { color: var(--text); }
+.modal__body {
+  padding: 16px 18px;
+  overflow-y: auto;
+}
+.modal__meta { font-size: 12px; color: var(--muted); margin: 0 0 12px; word-break: break-all; }
+.modal__meta code { background: var(--accent-soft); border-radius: 4px; padding: 0 4px; }
+.modal__meta a { color: var(--accent); }
