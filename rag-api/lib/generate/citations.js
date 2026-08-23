@@ -19,7 +19,7 @@ const SOURCE_RE = /\[source\s*(\d+)\]/gi;
  * reference. Case-insensitive; strips extra surrounding whitespace.
  *
  * @param {string} tok  raw token, e.g. `[SOURCE 3]`.
- * @returns /* {{ n: number, token: string } | null}
+ * @returns {{ n: number, token: string } | null}
  */
 export function normalizeSourceToken(tok) {
   const m = new RegExp(SOURCE_RE.source, 'i').exec(String(tok ?? ''));
@@ -38,7 +38,7 @@ export function normalizeSourceToken(tok) {
  *
  * @param {string} text        model output that may contain inline citations.
  * @param {object} sourceMap   `{ 1: {title,url,id}, 2: {...} }` from buildContext.
- * @returns {{ text: string, citations: Array<{ n: number, title?: string }> }} */
+ * @returns {{ text: string, citations: Array<{ n: number, title?: string }> }}
 export function validateCitations(text, sourceMap = {}) {
   const src = String(text ?? '');
   let out = src;
