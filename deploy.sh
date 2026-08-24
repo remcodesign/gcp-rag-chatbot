@@ -10,8 +10,8 @@
 #   ${REGION}-docker.pkg.dev/${PROJECT_ID}/rag/rag-frontend:latest
 #
 # Usage:
-#   ./deploy.sh build           # build both images (no push)
-#   ./deploy.sh push            # build + push both images
+#   ./deploy.sh build           # build all images (no push)
+#   ./deploy.sh push            # build + push all images
 #   ./deploy.sh plan            # build+push, then ./tf.sh plan
 #   ./deploy.sh apply           # build+push, then ./tf.sh apply (interactive)
 #
