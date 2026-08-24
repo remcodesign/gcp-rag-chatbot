@@ -13,20 +13,21 @@
  */
 
 import type { RagWindow } from '../types/config';
+import type { ViteEnv } from '../types/config';
 
-/** Build-time environment accessor so tests can stub `import.meta.env`. */
-interface EnvHolder {
-  env?: { VITE_API_BASE?: string; VITE_RAG_TRACE?: string };
-}
+/** Build-time env accessor typing — Vite statically inlines
+ * `import.meta.env.VITE_API_BASE` at build time, so this MUST be accessed as a
+ * direct `import.meta.env.*` member (no intermediate variable) or the value is
+ * never baked into the bundle. This cast only re-types it for dev/test. */
+const env = import.meta.env as unknown as ViteEnv;
 
 export function resolveApiBase(): string {
   if (typeof window !== 'undefined') {
     const w = window as RagWindow;
     if (w.__RAG_API_BASE__) return w.__RAG_API_BASE__;
   }
-  const meta = import.meta as unknown as EnvHolder;
-  if (meta.env && meta.env.VITE_API_BASE) {
-    return meta.env.VITE_API_BASE;
+  if (env.VITE_API_BASE) {
+    return env.VITE_API_BASE;
   }
   return '';
 }
@@ -41,9 +42,8 @@ export function resolveTraceEnabled(): boolean {
     const w = window as RagWindow;
     if (w.__RAG_TRACE__ !== undefined) return Boolean(w.__RAG_TRACE__);
   }
-  const meta = import.meta as unknown as EnvHolder;
-  if (meta.env && meta.env.VITE_RAG_TRACE !== undefined) {
-    return meta.env.VITE_RAG_TRACE === 'true';
+  if (env.VITE_RAG_TRACE !== undefined) {
+    return env.VITE_RAG_TRACE === 'true';
   }
   return true;
 }
