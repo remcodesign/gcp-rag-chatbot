@@ -9,8 +9,16 @@
  * prompt. It is a pure function of the trace payload so it stays unit-testable.
  */
 
+import type {
+  NormalizedTrace,
+  RawTrace,
+  TraceClassification,
+  TraceContext,
+  TraceRerank,
+} from '../types/trace';
+
 /** Parses the classification reason into a short human label. */
-export function describeClassification(classification) {
+export function describeClassification(classification: TraceClassification | null | undefined): string {
   if (!classification) return 'self-contained (no rewrite)';
   if (classification.rewrite) {
     return `needs rewrite — ${classification.reason || 'ambiguous'}`;
@@ -21,17 +29,17 @@ export function describeClassification(classification) {
 /**
  * Shapes the backend `trace` payload for rendering.
  *
- * @param {object|null} trace  the raw `trace` SSE payload.
- * @returns {object|null} normalized `{ query, classification, retrieved, rerank, context, timings, timedOut, finalPrompt }`.
+ * @param trace the raw `trace` SSE payload (may be partial).
+ * @returns a normalized object, or null when `trace` is falsy.
  */
-export function normalizeTrace(trace) {
+export function normalizeTrace(trace: RawTrace | null | undefined): NormalizedTrace | null {
   if (!trace) return null;
   return {
     query: trace.query || '',
     classification: describeClassification(trace.classification),
     retrieved: Array.isArray(trace.retrieved) ? trace.retrieved : [],
-    rerank: trace.rerank || { didRerank: false, reason: '' },
-    context: trace.context || { sources: [], length: 0 },
+    rerank: trace.rerank || ({ didRerank: false, reason: '' } satisfies TraceRerank),
+    context: trace.context || ({ sources: [], length: 0 } satisfies TraceContext),
     timings: trace.timings || null,
     timedOut: !!trace.timedOut,
     error: trace.error || null,
@@ -39,8 +47,13 @@ export function normalizeTrace(trace) {
   };
 }
 
-/** Rounds a Score or returns a placeholder when absent/NaN. */
-export function formatScore(score) {
+/**
+ * Rounds a score to a percentage or returns a placeholder when absent/NaN.
+ *
+ * @param score a 0..1 similarity score, or a non-numeric value.
+ * @returns a `NN%` string, or the placeholder `—`.
+ */
+export function formatScore(score: number | null | undefined): string {
   if (typeof score !== 'number' || !Number.isFinite(score)) return '—';
-  return (score * 100).toFixed(0) + '%';
+  return `${(score * 100).toFixed(0)}%`;
 }

@@ -19,8 +19,12 @@ now lets build and document `docs`:
 > **VERY IMPORTANT — Do not use GCloud deployment or user.roles changes - only use Terraform and GIT**
 >
 > **VERY IMPORTANT — Do not use GIT commit and push yourself - only use GIT for checking state and history:**
+>
+> **VERY IMPORTANT — use 100% strict TypeScript where possible, (frontend) only use Tailwind styling - so only use CSS if it is really needed**
 
-### 1.1 Read Project Instructions
+### 1.1 Read Project I
+
+nstructions
 
 ```txt
 .github/instructions/workspace.instructions.md

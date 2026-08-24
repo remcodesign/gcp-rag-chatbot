@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseSse } from '../src/lib/sseParser.js';
+import { parseSse } from '../src/lib/sseParser';
 
 describe('sseParser', () => {
   it('parses a typed frame with id, event and JSON data', () => {

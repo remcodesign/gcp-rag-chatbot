@@ -1,12 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { renderAnswer, buildSourceChips } from '../src/lib/citations.js';
+import { renderAnswer, buildSourceChips } from '../src/lib/citations';
+import type { Sanitizer } from '../src/types/markdown';
 
-// Node test env has no DOM, so DOMPurify's real sanitizer can't run. For the
-// markdown-structure assertions we inject a permissive sanitize (identity on
-// tags) so we can verify marked actually emits headings/lists/bold. The
-// real-DOMPurify sanitization is exercised by the browser build; the escape
-// fallback is asserted separately.
-const keepHtml = { sanitize: (html) => html };
+const keepHtml: { sanitize: Sanitizer } = { sanitize: (html) => html };
 
 describe('renderAnswer', () => {
   it('wraps inline [Source N] markers in citation spans', () => {
@@ -22,8 +18,6 @@ describe('renderAnswer', () => {
   });
 
   it('escapes untrusted markup in a no-DOM env (safe fallback)', () => {
-    // No deps injected -> resolveSanitize() falls back to HTML-escaping because
-    // DOMPurify isn't available in node. Raw <script> must not survive.
     const html = renderAnswer('<script>alert(1)</script> & [Source 2]');
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');

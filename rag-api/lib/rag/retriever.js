@@ -20,7 +20,12 @@ import { withSoftTimeout, createSemaphore } from './limiter.js';
  * @param {number} [options.limit=20]        default top-K.
  * @param {number} [options.maxConcurrent=4] pipeline-wide downstream cap.
  * @param {number} [options.retrieveTimeoutMs=2000]  soft timeout per retrieval.
- * @returns {{ retrieve, retrieveWithTimeout, embedAndRetrieve }}
+ * @returns {{
+ *   retrieve: (queryVector: number[], opts?: { limit?: number, distanceThreshold?: number }) => Promise<object[]>,
+ *   retrieveWithTimeout: (queryVector: number[], opts?: object) => Promise<object[]>,
+ *   embedAndRetrieve: (queryText: string, opts?: object) => Promise<{ hits: object[], timedOut: boolean, reason: string | null }>,
+ *   activeCount: number,
+ * }}
  */
 export function createRetriever(deps, options = {}) {
   const { firestore, embeddings } = deps;
@@ -31,6 +36,11 @@ export function createRetriever(deps, options = {}) {
   /**
    * Runs the Firestore `findNearest` query and maps docs into plain objects,
    * including the computed similarity and the document id.
+   *
+   * @param {number[]} queryVector
+   * @param {object} [opts]
+   * @param {number} [opts.limit]
+   * @param {number} [opts.distanceThreshold]
    */
   async function retrieve(queryVector, { limit: k = limit, distanceThreshold } = {}) {
     const col = firestore.collection('chunks');

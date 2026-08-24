@@ -146,7 +146,7 @@ function createOpenRouterClient() {
         });
         if (!res.ok) {
           const status = res.status;
-          const err = new Error(`OpenRouter chat HTTP ${status}`);
+          const err = /** @type {Error & { statusCode?: number, retryable?: boolean }} */ (new Error(`OpenRouter chat HTTP ${status}`));
           err.statusCode = status;
           err.retryable = status === 429 || status >= 500;
           throw err;

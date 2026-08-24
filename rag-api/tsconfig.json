@@ -1,0 +1,31 @@
+{
+  // Domain 9, Step 9.1 — build-time import/export safety for the backend.
+  //
+  // Goal: a dangling export/import (like the 2026-08 `validateCitations` bug,
+  // where an unterminated JSDoc swallowed `export function` — a crash NOT caught
+  // by vitest because tests only import the exports they use) must fail `tsc`
+  // HERE, before an image is built/pushed, not at Cloud Run startup.
+  //
+  // `checkJs: true` + NodeNext resolves every shipped module and export at build
+  // time; `noEmit` keeps tsc a pure validator. `strict:false` + `noImplicitAny`
+  // intentionally relaxed: this codebase's factory-via-DI pattern (factories
+  // return plain `object`, Firestore callbacks untyped) produces ~200
+  // "implicitly any" diagnostics that are NOT the bug class this gate targets.
+  // The regression we guard (unresolved module / missing export) is a
+  // resolve-time error and is fully enforced regardless of `noImplicitAny`.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.js", "lib/**/*.js"]
+}

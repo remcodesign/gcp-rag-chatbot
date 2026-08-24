@@ -41,17 +41,27 @@ export function normalizeError(err) {
  * Creates a streaming chat bridge.
  *
  * @param {object} deps
- * @param {object} deps.client  must expose `chat.stream(params)` returning an async iterable, OR
+ * @param {object} deps.chat  must expose `chat.stream(params)` returning an async iterable, OR
  *   `chat.send(params)` that returns an async iterable when `params.stream` is true.
  * @param {object} [options]
  * @param {string} [options.model]  default model id (overridable per request).
  * @param {() => object} [options.requestId]  correlation id factory (for logging).
- * @returns {object} `{ streamReply, normalizeError }`.
+ * @returns {{
+ *   streamReply: (args: { messages: Array<object>, model?: string, signal?: AbortSignal }) =>
+ *     Promise<{ requestId: object, stream: AsyncIterable<object>, model?: string }>,
+ *   normalizeError: (err: unknown) => { message: string, statusCode: number|null, retryable: boolean },
+ * }}
  */
 export function createChatBridge(deps, options = {}) {
   const model = options.model;
   const requestId = options.requestId ?? (() => `gen-${++_counter}`);
 
+  /**
+   * @param {object} args
+   * @param {Array<object>} args.messages
+   * @param {string} [args.model]
+   * @param {AbortSignal} [args.signal]
+   */
   async function requestParams({ messages, model: m, signal }) {
     return {
       model: m ?? model,
@@ -64,7 +74,11 @@ export function createChatBridge(deps, options = {}) {
   /**
    * Opens a streaming reply for the given messages.
    *
-   * @returns {Promise<{ requestId, stream, model }>} where `stream` is a `for await`-able
+   * @param {object} [args]
+   * @param {Array<object>} [args.messages]  chat messages.
+   * @param {string} [args.model]  per-request model override.
+   * @param {AbortSignal} [args.signal]  optional abort signal.
+   * @returns {Promise<{ requestId: object, stream: AsyncIterable<object>, model?: string }>} where `stream` is a `for await`-able
    *   async iterable of raw chunks. Throws a normalized error if the request cannot
    *   be opened; streamed errors are thrown from inside the iterator instead.
    */

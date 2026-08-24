@@ -28,11 +28,10 @@ export function preview(text, maxChars = PREVIEW_CHARS) {
  * @param {object} hit  a retrieval hit (`id`, `title`, `url`, `text`,
  *   `similarityScore`, optionally `distance`).
  * @param {object} [options]
- * @param {string} [options.promptKey] `${n}.${id}` — the numbered key the hit
- *   received in the LLM context window, or `null` when it was dropped by the
- *   rerank/relevance stage. Used to tag each chunk "in context" vs "dropped".
+ * @param {number} [options.rank=0] the numbering (`1`-based) this hit received in
+ *   the LLM context window, or `0` for segments dropped by rerank/relevance.
  * @param {boolean} [options.keptInContext] whether this hit survived into the LLM context.
- * @returns {object} safe, small chunk descriptor.
+ * @returns {{ id?: string, rank: number, title: string, url: string, category?: string|null, score: number|null, textPreview: string, text: string, chars: number, keptInContext: boolean }}
  */
 export function serializeHit(hit = {}, { rank = 0, keptInContext = false } = {}) {
   const score =
@@ -59,7 +58,16 @@ export function serializeHit(hit = {}, { rank = 0, keptInContext = false } = {})
 /**
  * Builds the full RAG trace payload for one turn.
  *
- * @param {object} outcome  the resolved `pipeline.run(...)` outcome.
+ * @param {object} [outcome={}]  the resolved `pipeline.run(...)` outcome (partial allowed).
+ * @param {string} [outcome.query]  the user query.
+ * @param {Array<object>} [outcome.retrievalHits]  array of retrieved hits.
+ * @param {Record<number, object>} [outcome.sourceMap]  numbered source metadata.
+ * @param {string} [outcome.context]  the assembled LLM context.
+ * @param {boolean} [outcome.timedOut]  whether retrieval soft-timed-out.
+ * @param {object} [outcome.rerankInfo]  `{ didRerank, reason }`.
+ * @param {object} [outcome.classification]  classifier result.
+ * @param {object} [outcome.timings]  per-stage timings in ms.
+ * @param {object} [outcome.error]  retrieval error diagnosis `{ message }`.
  * @param {object} [options]
  * @param {object} [options.messages]  the chat messages sent to the LLM (used
  *   to render the final prompt). If omitted the `finalPrompt` field is omitted.

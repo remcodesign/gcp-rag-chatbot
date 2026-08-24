@@ -22,7 +22,11 @@ export const EMBED_DIMS = 1536;
  * @param {string} [opts.model]      model id (default EMBED_MODEL).
  * @param {string} [opts.baseUrl]    default OpenRouter API base.
  * @param {number} [opts.timeoutMs]  per-request timeout (default 30_000).
- * @returns {{ embedBatch: (texts:string[], opts?) => Promise<number[][]>, model, dimensions }}
+ * @returns {{
+ *   embed: (input: string | string[]) => Promise<number[] | number[][]>,
+ *   model: string,
+ *   dimensions: number,
+ * }}
  */
 export function createOpenRouterEmbedder({
   apiKey,
@@ -50,14 +54,17 @@ export function createOpenRouterEmbedder({
         const status = res.status;
         let body;
         try { body = await res.text(); } catch { body = ''; }
-        const err = new Error(`OpenRouter embeddings HTTP ${status}: ${body.slice(0, 200)}`);
+        // Enrich the Error with the OpenRouter status for retry/backoff logic
+        // (the same `.statusCode`/`.retryable` shape the chat bridge uses).
+        const err = /** @type {Error & { statusCode?: number, retryable?: boolean }} */ (new Error(`OpenRouter embeddings HTTP ${status}: ${body.slice(0, 200)}`));
         err.statusCode = status;
         err.retryable = status === 429 || status >= 500;
         throw err;
       }
-      const data = await res.json();
-      // data.data[] each have `.embedding` (float array length = dimensions).
-      return Array.isArray(data.data) ? data.data.map((d) => d.embedding) : [];
+      // OpenRouter returns `{ data: [{ embedding: number[] }, ...] }`.
+      const payload = /** @type {{ data?: Array<{ embedding?: number[] }> }} */ (await res.json());
+      const data = payload.data;
+      return Array.isArray(data) ? data.map((d) => d.embedding ?? []) : [];
     } finally {
       clearTimeout(t);
     }

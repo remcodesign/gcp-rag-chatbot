@@ -11,20 +11,21 @@
  * back here as `lastEventId`, which the backend uses to resume from Firestore.
  */
 
+import type { SendParams } from '../types/chat';
+
+/** Options for opening the stream. */
+export interface OpenSseOptions {
+  /** Backend origin (defaults to same-origin via the Vite dev proxy). */
+  baseUrl?: string;
+}
+
 /**
  * Opens the SSE stream for a session and yields raw text chunks.
  *
- * @param {object} params
- * @param {string} params.sessionId
- * @param {string} params.query
- * @param {number|null} params.lastEventId  resume point (Last-Event-ID).
- * @param {boolean} [params.trace]  ask the backend to attach the RAG "inner workings" payload.
- * @param {AbortSignal} params.signal
- * @param {object} [options]
- * @param {string} [options.baseUrl]  backend origin (defaults to same-origin).
- * @returns {AsyncIterable<string>} raw SSE text chunks.
+ * @param params transport parameters from the store.
+ * @param options connection options.
  */
-export async function* openSseStream(params, options = {}) {
+export async function* openSseStream(params: SendParams, options: OpenSseOptions = {}): AsyncIterable<string> {
   const { sessionId, query, lastEventId, signal, trace } = params;
   const baseUrl = options.baseUrl ?? '';
   const url = `${baseUrl}/sessions/${encodeURIComponent(sessionId)}/messages`;
@@ -40,7 +41,7 @@ export async function* openSseStream(params, options = {}) {
   });
 
   if (!res.ok || !res.body) {
-    const err = new Error(`SSE request failed: HTTP ${res.status}`);
+    const err: Error & { statusCode?: number } = new Error(`SSE request failed: HTTP ${res.status}`);
     err.statusCode = res.status;
     throw err;
   }

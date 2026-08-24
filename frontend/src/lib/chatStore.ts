@@ -3,12 +3,7 @@
  *
  * Owns the client-side chat state machine and the SSE consumer. It is the
  * frontend counterpart of the backend generator contract
- * (`rag-api/lib/generate/generator.js`):
- *
- *   - `progress` events `{ stage, progress }` -> advance the status indicator
- *   - `token` events `{ text, citations }` -> append to the answer, update chips
- *   - `done` events `{ sources, citations }` -> finalize
- *   - `error` events `{ message, detail }` -> surface a retry banner
+ * (`rag-api/lib/generate/generator.js`).
  *
  * Reconnection (Step 6.3) pairs with the backend's `Last-Event-ID` resume: the
  * store remembers the last event id it saw and sends it back on reconnect so
@@ -19,162 +14,173 @@
  */
 
 import { reactive } from 'vue';
-import { parseSse } from './sseParser.js';
+import { parseSse } from './sseParser';
+import type {
+  ChatState,
+  ChatStore,
+  ChatStoreOptions,
+  ParsedFrame,
+  SendTransport,
+  SseParser,
+} from '../types/chat';
+import type { SseDone, SseError, SseProgress, SseToken } from '../types/sse';
+import type { RawTrace } from '../types/trace';
 
 /** Stage labels mirrored from the backend `STAGES`. */
-export const STAGES = Object.freeze({
+export const STAGES = {
   RETRIEVAL: 'retrieval',
   RERANK: 'rerank',
   GENERATION: 'generation',
-});
+} as const;
 
 /** Human labels for the progress UI (Step 6.2). */
-export const STAGE_LABELS = Object.freeze({
+export const STAGE_LABELS: Record<string, string> = Object.freeze({
   [STAGES.RETRIEVAL]: 'Understanding',
   [STAGES.RERANK]: 'Searching',
   [STAGES.GENERATION]: 'Selecting',
 });
 
 /** Client-side lifecycle states. */
-export const STATUS = Object.freeze({
+export const STATUS = {
   IDLE: 'idle',
   STREAMING: 'streaming',
   DONE: 'done',
   ERROR: 'error',
-});
+} as const;
+
+/** Status value type derived from the `STATUS` constant. */
+export type StatusValue = (typeof STATUS)[keyof typeof STATUS];
 
 const DEFAULT_MAX_RETRIES = 3;
 const RETRY_BASE_MS = 500;
 
+/** Default parser: the real SSE parser (a no-op stub here was a silent bug). */
+const DEFAULT_PARSER: SseParser = { parseSse };
+
 /**
  * Creates a chat store.
  *
- * @param {object} deps
- * @param {(params:{sessionId:string, query:string, lastEventId:number|null, signal:AbortSignal}) => AsyncIterable<{id:number|null,event:string,data:any}>} deps.send
- *        transport that opens the SSE stream and yields parsed frames.
- * @param {object} [deps.parser]  `{ parseSse(buffer) }` (defaults to sseParser).
- * @param {object} [options]
- * @param {number} [options.maxRetries]  reconnect attempts before surfacing a manual retry (default 3).
- * @param {number} [options.retryBaseMs]  exponential backoff base (default 500).
- * @returns {object} store with `state`, `sendMessage`, `retry`, `reset`.
+ * @param deps injected dependencies (transport + optional parser).
+ * @param options store options.
  */
-export function createChatStore(deps, options = {}) {
+export function createChatStore(deps: { send: SendTransport; parser?: SseParser }, options: ChatStoreOptions = {}): ChatStore {
   const { send } = deps;
-  // Default to the REAL SSE parser. A no-op default here was a silent bug:
-  // frames were swallowed and the UI stayed stuck at the first progress stage.
-  // Tests may inject a fake parser, but production wiring must not rely on that.
-  const parser = deps.parser ?? { parseSse };
+  const parser: SseParser = deps.parser ?? DEFAULT_PARSER;
   const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
   const retryBaseMs = options.retryBaseMs ?? RETRY_BASE_MS;
+  const traceEnabled = options.trace ?? true;
 
   // Reactive so the Vue components reading `store.state.*` re-render on every
-  // mutation. A plain object here would NOT trigger updates — the root cause of
-  // "SSE arrives but nothing renders".
-  const state = reactive({
-    status: STATUS.IDLE,
+  // mutation. A plain object here would NOT trigger updates.
+  const state = reactive<ChatState>({
+    status: 'idle',
     stage: null,
     progress: 0,
     answer: '',
-    citations: [], // running validated citations [{ n, title }]
-    sources: [], // final source list [{ n, title, url, id }]
-    trace: null, // last RAG "inner workings" payload ({ retrieved, rerank, context, finalPrompt, ... })
+    citations: [],
+    sources: [],
+    trace: null,
     error: null,
     lastEventId: null,
     retryCount: 0,
   });
 
-  let controller = null;
-  let sessionId = null;
-  let query = null;
+  let controller: AbortController | null = null;
+  let sessionId = '';
+  let query = '';
+
+  /** Reads the current lifecycle status through a function so TS does not
+   *  over-narrow `state.status` after it is reassigned. */
+  function getStatus(): ChatState['status'] {
+    return state.status;
+  }
 
   /** Appends a token delta and merges the running citation list (Step 6.1). */
-  function appendToken({ text = '', citations = [] } = {}) {
-    if (text) state.answer += text;
-    for (const c of citations) {
+  function appendToken(payload: SseToken): void {
+    if (payload.text) state.answer += payload.text;
+    for (const c of payload.citations ?? []) {
       if (!state.citations.some((x) => x.n === c.n)) state.citations.push(c);
     }
   }
 
   /** Applies a progress event, never moving the indicator backward (Step 6.2). */
-  function applyProgress({ stage, progress = 0 } = {}) {
-    if (stage) state.stage = stage;
-    if (typeof progress === 'number' && progress >= state.progress) {
-      state.progress = progress;
+  function applyProgress(ev: SseProgress): void {
+    if (ev.stage) state.stage = ev.stage as ChatState['stage'];
+    if (typeof ev.progress === 'number' && ev.progress >= state.progress) {
+      state.progress = ev.progress;
     }
   }
 
   /** Handles a single parsed frame from the stream. */
-  function handleFrame(frame) {
-    if (frame.id != null) state.lastEventId = frame.id;
+  function handleFrame(frame: ParsedFrame): void {
+    if (frame.id != null && frame.id !== null) state.lastEventId = frame.id;
     switch (frame.event) {
       case 'progress':
-        applyProgress(frame.data);
+        applyProgress(frame.data as SseProgress);
         break;
       case 'token':
-        appendToken(frame.data);
+        appendToken(frame.data as SseToken);
         break;
       case 'done':
-        state.sources = frame.data && frame.data.sources ? frame.data.sources : [];
-        state.status = STATUS.DONE;
+        state.sources = (frame.data as SseDone).sources ?? [];
+        state.status = 'done';
         break;
       case 'trace':
-        // POC: keep the RAG inner-workings payload so the sidebar can render it.
-        state.trace = frame.data;
+        state.trace = frame.data as RawTrace;
         break;
       case 'error':
-        state.error = frame.data && frame.data.message ? frame.data.message : 'generation interrupted';
-        state.status = STATUS.ERROR;
+        state.error = (frame.data as SseError).message ?? 'generation interrupted';
+        state.status = 'error';
         break;
       default:
         break;
     }
   }
 
-  /** Runs one streaming attempt, returning `{ ok, interrupted }`. */
-  async function runStream() {
+  /** Runs one streaming attempt, returning `ok` when a terminal event arrived. */
+  async function runStream(): Promise<{ ok: boolean }> {
     controller = new AbortController();
     const iterable = send({
       sessionId,
       query,
       lastEventId: state.lastEventId,
-      trace: options.trace ?? true,
+      trace: traceEnabled,
       signal: controller.signal,
     });
 
     let buffer = '';
     for await (const chunk of iterable) {
-      if (controller.signal.aborted) return { ok: false, interrupted: true };
+      if (controller.signal.aborted) return { ok: false };
       const { frames, rest } = parser.parseSse(buffer + chunk);
       buffer = rest;
       for (const frame of frames) handleFrame(frame);
-      if (state.status === STATUS.DONE || state.status === STATUS.ERROR) {
-        return { ok: state.status === STATUS.DONE, interrupted: false };
+      if (state.status === 'done' || state.status === 'error') {
+        return { ok: state.status === 'done' };
       }
     }
     // Stream ended without a terminal event -> treat as interrupted.
-    return { ok: false, interrupted: true };
+    return { ok: false };
   }
 
   /** Sends a user message and drives the stream with reconnection (Step 6.3). */
-  async function sendMessage({ sessionId: sid, query: q }) {
+  async function sendMessage({ sessionId: sid, query: q }: { sessionId: string; query: string }): Promise<void> {
     sessionId = sid;
     query = q;
-    state.status = STATUS.STREAMING;
+    state.status = 'streaming';
     state.stage = STAGES.RETRIEVAL;
     state.progress = 0;
     state.answer = '';
     state.citations = [];
     state.sources = [];
     state.trace = null;
-    state.error = null;
+    state.error = '';
     state.retryCount = 0;
     state.lastEventId = null;
 
     for (;;) {
-      const { ok, interrupted } = await runStream();
+      const { ok } = await runStream();
       if (ok) return;
-      if (state.status === STATUS.ERROR) return; // terminal error surfaced
-      // Interrupted (network blip / stream ended early): reconnect with backoff.
+      if (getStatus() === STATUS.ERROR) return; // terminal error surfaced
       if (state.retryCount >= maxRetries) {
         state.status = STATUS.ERROR;
         state.error = 'connection lost — retry manually';
@@ -186,15 +192,15 @@ export function createChatStore(deps, options = {}) {
   }
 
   /** Manual retry after a terminal error (Step 6.3 non-happy path). */
-  async function retry() {
+  async function retry(): Promise<void> {
     if (!sessionId || !query) return;
     state.status = STATUS.STREAMING;
-    state.error = null;
+    state.error = '';
     state.retryCount = 0;
     for (;;) {
       const { ok } = await runStream();
       if (ok) return;
-      if (state.status === STATUS.ERROR) return;
+      if (getStatus() === STATUS.ERROR) return;
       if (state.retryCount >= maxRetries) {
         state.status = STATUS.ERROR;
         state.error = 'connection lost — retry manually';
@@ -206,17 +212,17 @@ export function createChatStore(deps, options = {}) {
   }
 
   /** Aborts any in-flight stream and resets to idle. */
-  function reset() {
-    controller && controller.abort();
+  function reset(): void {
+    controller?.abort();
     controller = null;
-    state.status = STATUS.IDLE;
+    state.status = 'idle';
     state.stage = null;
     state.progress = 0;
     state.answer = '';
     state.citations = [];
     state.sources = [];
     state.trace = null;
-    state.error = null;
+    state.error = '';
     state.lastEventId = null;
     state.retryCount = 0;
   }
@@ -224,7 +230,7 @@ export function createChatStore(deps, options = {}) {
   return { state, sendMessage, retry, reset };
 }
 
-/** Promise-based delay for backoff (injectable for tests via options). */
-function delay(ms) {
+/** Promise-based delay for backoff. */
+function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

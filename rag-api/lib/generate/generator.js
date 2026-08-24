@@ -51,7 +51,15 @@ const DEFAULT_MAX_REGEN_RETRIES = 2;
  * @param {object} [deps.logger]      `{ info, warn, error }` (default no-op).
  * @param {object} [options]
  * @param {number} [options.maxRegenRetries]  cap on mid-stream regenerations (default 2).
- * @returns {{ streamAnswer: Function, generateOnce: Function }}
+ * @returns {{
+ *   streamAnswer: (args: {
+ *     sse: object,
+ *     sessionId: string,
+ *     query: string,
+ *     options?: { history?: object[], systemPrompt?: string, trace?: boolean },
+ *   }) => Promise<void>,
+ *   generateOnce: (args: object) => Promise<{ text: string, citations: object[], requestId: string, model?: string }>,
+ * }}
  */
 export function createGenerator(deps, options = {}) {
   const { bridge, pipeline, store } = deps;
@@ -110,6 +118,15 @@ export function createGenerator(deps, options = {}) {
    * Emits progress events, streams tokens, and — on a mid-stream failure —
    * drives context-aware regeneration up to `maxRegenRetries`, never
    * re-splicing the stream and never returning HTTP 500 once started.
+   *
+   * @param {object} args
+   * @param {object} args.sse
+   * @param {string} args.sessionId
+   * @param {string} args.query
+   * @param {object} [args.options]
+   * @param {Array<object>} [args.options.history]
+   * @param {string} [args.options.systemPrompt]
+   * @param {boolean} [args.options.trace]
    */
   async function streamAnswer({ sse, sessionId, query, options = {} }) {
     sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RETRIEVAL, progress: 40 });

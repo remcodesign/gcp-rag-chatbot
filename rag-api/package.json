@@ -1,0 +1,29 @@
+{
+  "name": "rag-api",
+  "version": "0.1.0",
+  "description": "Streaming RAG backend — stateless session/event state on Cloud Firestore",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "smoke": "node scripts/smoke.js",
+    "start": "node src/server.js"
+  },
+  "dependencies": {
+    "@google-cloud/firestore": "^7.11.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.2.0",
+    "eslint": "^10.9.0",
+    "typescript": "5.9.3",
+    "vitest": "^2.1.9"
+  }
+}

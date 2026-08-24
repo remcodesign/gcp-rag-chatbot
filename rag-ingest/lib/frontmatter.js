@@ -40,7 +40,7 @@ export function parseKeyValue(line) {
  * @param {object} [opts]
  * @param {Array<string>} [opts.requiredKeys=REQUIRED_KEYS]  keys that must be
  *   present or the file is considered invalid.
- * @returns {{ ok: true, id, category, title, url, body } | { ok: false, reason: string }}
+ * @returns {{ ok: true, id: string, category: string, title: string, url: string, body: string } | { ok: false, reason: string }}
  */
 export function parseSource(raw, { requiredKeys = REQUIRED_KEYS } = {}) {
   if (typeof raw !== 'string' || raw.trim().length === 0) {

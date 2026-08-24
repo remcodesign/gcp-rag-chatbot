@@ -1,0 +1,21 @@
+{
+  // Domain 9 / Step 9.1 — build-time import/export safety for the seed Job.
+  // Same pragmatic contract as rag-api (see its tsconfig for the rationale):
+  // NodeNext + checkJs resolves every shipped module/export at build time so a
+  // dangling import fails `npm run typecheck` BEFORE the Job image is pushed.
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "lib": ["ES2022"],
+    "checkJs": true,
+    "allowJs": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "types": ["node"]
+  },
+  "include": ["src/**/*.js", "lib/**/*.js"]
+}

@@ -25,7 +25,10 @@ import { classifyQuery } from './classifyQuery.js';
  * @param {object} deps.embeddings   Adapter: `embed(text) -> number[]`.
  * @param {object} [deps.reranker]   Adapter: `rerank(query, hits) -> hits`.
  * @param {object} [options]         See retriever/reranker/context options.
- * @returns {{ buildContextResult, run, classifyQuery }}
+ * @returns {{
+ *   run: (query: string, opts?: { history?: Array<object>, rewrittenQuery?: string }) => Promise<object>,
+ *   classifyQuery: (query: string, opts?: { history?: Array<object> }) => object,
+ * }}
  */
 export function createPipeline(deps, options = {}) {
   const retriever = createRetriever(deps, options);

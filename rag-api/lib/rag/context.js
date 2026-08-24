@@ -30,13 +30,14 @@ export function isRelevant(hit, { minScore = 0.3 } = {}) {
  * @param {object} [options]
  * @param {number} [options.minScore=0.3]  relevance floor for including a doc.
  * @param {number} [options.maxSources=5]  hard cap on sources in the context.
- * @returns {{ sourceMap: Record<string, {title:string,url:string}>, context: string, sources: Array<object> }}
+ * @returns {{ sourceMap: Record<number, { title: string, url: string, id?: string, text?: string }>, context: string, sources: Array<object> }}
  */
 export function buildContext(hits, { minScore = 0.3, maxSources = 5 } = {}) {
   const kept = (Array.isArray(hits) ? hits : [])
     .filter((h) => isRelevant(h, { minScore }))
     .slice(0, maxSources); // relevance-first, then hard cap
 
+  /** @type {Record<number, { title: string, url: string, id?: string, text?: string }>} */
   const sourceMap = {};
   const sources = [];
   const lines = [];

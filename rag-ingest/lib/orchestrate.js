@@ -52,17 +52,23 @@ export async function runSeed(deps, options = {}) {
   for (const src of sources) {
     const parsed = parseSource(src.content);
     if (!parsed.ok) {
-      skipped.push({ id: src.id, reason: parsed.reason });
-      log(`[skip] ${src.id}: ${parsed.reason}`);
+      // `parsed` may not narrow under JSDoc; read the failure reason off a
+      // typed local so the field access type-checks deterministically.
+      const fail = /** @type {{ reason: string }} */ (parsed);
+      skipped.push({ id: src.id, reason: fail.reason });
+      log(`[skip] ${src.id}: ${fail.reason}`);
       continue;
     }
-    const chunks = chunkText(parsed.body).map((c, i) => ({
+    // After the guard `parsed` is the success branch; cast so the success-shape
+    // fields (body/id/category/...) type-check regardless of narrowing.
+    const good = /** @type {{ id: string, category: string, title: string, url: string, body: string }} */ (parsed);
+    const chunks = chunkText(good.body).map((c, i) => ({
       ...c,
       index: i,
-      sourceId: parsed.id,
-      category: parsed.category,
-      title: parsed.title,
-      url: parsed.url,
+      sourceId: good.id,
+      category: good.category,
+      title: good.title,
+      url: good.url,
     }));
     allChunks.push(...chunks);
   }

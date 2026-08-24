@@ -13,8 +13,13 @@
  * how long we *wait* and we never let a downstream failure (e.g. an OpenRouter
  * embed error) throw out of the retrieval path. A rejection is treated like a
  * timeout: resolve with `{ timedOut: true, value: fallback }`.
+ *
+ * @template T
+ * @param {() => Promise<T>} fn
+ * @param {{ timeoutMs?: number, fallback?: T, label?: string }} [options]
+ * @returns {Promise<{ timedOut: boolean, value: any }>}
  */
-export function withSoftTimeout(fn, { timeoutMs, fallback, label = 'async task' } = {}) {
+export function withSoftTimeout(fn, { timeoutMs, fallback, label: _label = 'async task' } = {}) {
   let timer;
   const timeout = new Promise((resolve) => {
     timer = setTimeout(() => resolve({ timedOut: true, value: fallback }), timeoutMs);
@@ -33,6 +38,13 @@ export function withSoftTimeout(fn, { timeoutMs, fallback, label = 'async task' 
  * permits are taken, the work is queued (backpressure) instead of erroring.
  *
  * @param {number} [maxConcurrent=4]  max simultaneous acquisitions.
+ * @returns {{
+ *   acquire: () => Promise<void>,
+ *   release: () => void,
+ *   run: <W>(work: () => Promise<W> | W) => Promise<W>,
+ *   activeCount: number,
+ *   queueLength: number,
+ * }}
  */
 export function createSemaphore(maxConcurrent = 4) {
   let active = 0;

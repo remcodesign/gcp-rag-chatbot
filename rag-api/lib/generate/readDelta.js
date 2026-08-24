@@ -18,7 +18,7 @@
  *
  * @param {object} chunk  a raw streaming chunk from the SDK.
  * @param {object} [options]
- * @param {string} [options.deltaPath]  dotted path to the delta (default `choices.0.delta.content`).
+ * @param {string} [options.delta]  dotted path to the token text (default `choices.0.delta.content`).
  * @returns {string} the token text, or `''` for frames with no token (tool calls,
  *   reasoning deltas left empty by the model, etc).
  */
