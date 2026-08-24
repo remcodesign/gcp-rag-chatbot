@@ -1,6 +1,18 @@
 ---
 description: "Use when working in the Demo RAG Northwind Outfitters demo (GCP + Node). Covers architecture invariants, Terraform/Cloud Run deployment, Node modules, and Firestore state/embedding conventions."
----<!-- leave a blank line above this comment; the YAML frontmatter ends on the `---` line above -->
+---
+
+<!-- leave a blank line above this comment; the YAML frontmatter ends on the `---` line above -->
+> **VERY IMPORTANT — read and follow these instructions in order:**
+>
+> **VERY IMPORTANT — NEVER RUN `./tf.sh apply` and `./tf.sh destroy` YOURSELF, YOU CAN RUN `./tf.sh plan`:**
+>
+> **VERY IMPORTANT — Do not use GCloud deployment or user.roles changes - only use Terraform and GIT**
+>
+> **VERY IMPORTANT — Do not use GIT commit and push yourself - only use GIT for checking state and history:**
+>
+> **VERY IMPORTANT — use 100% strict TypeScript where possible, (frontend) only use Tailwind styling - only use (scoped) CSS if it is really needed**
+
 # Demo RAG Northwind Outfitters — workspace guidelines
 
 The canonical source of truth is `docs/1-1-idea-specs.md` and the `<domain>` docs, plus
