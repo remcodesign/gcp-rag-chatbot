@@ -24,10 +24,16 @@ now lets build and document `docs`:
 
 ### 1.1 Read Project I
 
-nstructions
+Instructions
 
 ```txt
 .github/instructions/workspace.instructions.md
+```
+
+Skills
+
+```txt
+.github/skills/nodejs-strict-typescript/SKILL.md
 ```
 
 ### 1.2 Load project context

@@ -89,12 +89,11 @@ build_all() {
   # exits non-zero and aborts before an image is pushed, so a broken export
   # (the 2026-08 `validateCitations` case) fails HERE, never at Cloud Run boot.
   #
-  # rag-api is strict TS: its resolve/compile guard is `tsc -p tsconfig.build.json`
-  # (`check_build=1`), so it has NO separate smoke script. rag-ingest is still
-  # checkJs `.js` and keeps its `scripts/smoke.js` import guard. The frontend's
-  # resolve guard is `vite build` (check_build=1).
+  # rag-api AND rag-ingest are strict TS: their resolve/compile guard is
+  # `tsc -p tsconfig.build.json` (`check_build=1`), so they have NO separate
+  # smoke script. The frontend's resolve guard is `vite build` (check_build=1).
   run_checks rag-api 1
-  run_checks rag-ingest
+  run_checks rag-ingest 1
   run_checks frontend 1
   build_image rag-api rag-api
   build_image rag-ingest rag-ingest
@@ -102,20 +101,16 @@ build_all() {
 }
 
 # Domain 9 / Step 9.5 — the tooling gate.
-# order: typecheck -> lint -> (smoke) -> test -> build.
-# A package runs `npm run smoke` when it has `scripts/smoke.[jt]s` (the Node
-# checkJs packages) — the compiled `tsc`/`vite build` (`check_build=1`) is the
-# resolve guard for the strict-TS packages that ship distilled output.
+# order: typecheck -> lint -> test -> build.
+# Every package is now strict TS (rag-api, rag-ingest) or strict TS + build
+# dist-based (frontend): the compiled `tsc -p tsconfig.build.json` / `vite build`
+# (`check_build=1`) is the module/export resolve guard. No package carries a
+# standalone `smoke` script; `check_build=0` is unused but kept for flexibility.
 run_checks() {
   local dir="$1" check_build="${2:-0}"
   echo "==> Checks: ${dir}"
   ( cd "$ROOT/$dir" && npm run typecheck )
   ( cd "$ROOT/$dir" && npm run lint )
-  # Only the Node checkJs packages carry a standalone `smoke` script (they
-  # import every entrypoint into real ESM to catch runtime-import failures).
-  if [[ -f "$ROOT/$dir/scripts/smoke.js" ]]; then
-    ( cd "$ROOT/$dir" && npm run smoke )
-  fi
   ( cd "$ROOT/$dir" && npm test )
   if [[ "$check_build" == "1" ]]; then
     ( cd "$ROOT/$dir" && npm run build )

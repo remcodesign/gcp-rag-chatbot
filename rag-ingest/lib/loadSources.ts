@@ -9,16 +9,17 @@
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join, extname, sep } from 'node:path';
 
+import type { Source } from './types/corpus.js';
+
 /**
  * Reads all `*.md` files under `dir` into `{ id, content }` entries. `id` is the
  * relative path (stable, deterministic) so skipped-file logs are readable.
- *
- * @param {string} dir   absolute path to the corpus directory.
- * @returns {Promise<Array<{id:string, content:string}>>}
+ * @param dir absolute path to the corpus directory.
+ * @returns an array of `{ id, content }` source entries.
  */
-export async function loadSources(dir) {
+export async function loadSources(dir: string): Promise<Source[]> {
   const entries = await walk(dir);
-  const sources = [];
+  const sources: Source[] = [];
   for (const file of entries) {
     const content = await readFile(file, 'utf8');
     const rel = file
@@ -31,10 +32,11 @@ export async function loadSources(dir) {
   return sources;
 }
 
-async function walk(dir) {
-  const out = [];
-  const isDir = await statSafe(dir).then((s) => Boolean(s?.isDirectory()));
-  if (!isDir) return out;
+/** Recursively collects all `*.md` file paths under `dir`. */
+async function walk(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  const s = await statSafe(dir);
+  if (!s?.isDirectory()) return out;
   const entries = await readdir(dir, { withFileTypes: true });
   for (const e of entries) {
     const full = join(dir, e.name);
@@ -47,7 +49,7 @@ async function walk(dir) {
   return out;
 }
 
-async function statSafe(p) {
+async function statSafe(p: string) {
   try {
     return await stat(p);
   } catch {

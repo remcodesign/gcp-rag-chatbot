@@ -58,12 +58,19 @@ Why not a barrel:
   **silently collides** if two files ever export the same name.
 - Direct imports show ownership at a glance, are collision-immune, and give
   crisp jump-to-definition.
-- A barrel is only worth keeping for an external _public_ API surface; internal
-  `lib/` + `test/` do not need one.
+- The codebase keeps **zero barrels** — not even runtime domain entrypoints
+  (see below).
 
 Keep the **runtime** domain entrypoint barrels that export *functions/classes*
 (e.g. `lib/state/index.ts` exporting `createStateStore` + constants + errors) —
 that is a legitimate public API. Only the **types/** folder omits a barrel.
+
+> **The codebase uses NO barrels at all.** In practice every
+> consumer imports the concrete domain file directly (`pipeline.ts`,
+> `sessionStore.ts`, `generator.ts`, `sse.ts`, ...), so `lib/state/index.ts` /
+> `lib/rag/index.ts` / `lib/generate/index.ts` / `lib/index.ts` were dead
+> re-exports and were all deleted. Follow that: import the concrete file, never
+> add an `index.ts`-only re-export barrel (runtime or types).
 
 ## tsconfig layout
 

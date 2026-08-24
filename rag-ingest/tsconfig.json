@@ -1,15 +1,24 @@
 {
-  // Domain 9 / Step 9.1 — build-time import/export safety for the seed Job.
-  // Same pragmatic contract as rag-api (see its tsconfig for the rationale):
-  // NodeNext + checkJs resolves every shipped module/export at build time so a
-  // dangling import fails `npm run typecheck` BEFORE the Job image is pushed.
+  // 100% strict TypeScript, mirroring rag-api.
+  //
+  // This is a strict-types gate (no `any`) in addition to the module/export
+  // gate. The DI factories, Firestore-shaped boundary, chunking/front-matter
+  // and seeder write path are all explicitly typed.
+  //
+  // NodeNext ESM: source files are `.ts` but import specifiers keep the `.js`
+  // suffix (resolves to the on-disk `.ts`). `noEmit` keeps `tsc` a pure
+  // type-checker; the runtime build uses `tsconfig.build.json` to emit `dist/`.
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": ["ES2022"],
-    "checkJs": true,
-    "allowJs": true,
+    "strict": true,
+    "noImplicitAny": true,
+    "noImplicitOverride": true,
+    "noUncheckedIndexedAccess": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
     "noEmit": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
@@ -17,5 +26,5 @@
     "resolveJsonModule": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.js", "lib/**/*.js"]
+  "include": ["src/**/*.ts", "lib/**/*.ts", "test/**/*.ts"]
 }

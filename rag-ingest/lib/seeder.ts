@@ -16,12 +16,23 @@
 
 import { FieldValue } from '@google-cloud/firestore';
 
+import type { Firestore } from './types/firestore.js';
+import type { Embedder } from './types/embedder.js';
+import type { Chunk } from './types/corpus.js';
+
+export interface WriteVectorOptions {
+  maxRetries?: number;
+  retryBaseMs?: number;
+}
+
+type EmbedError = Error & { code?: string };
+
 /**
  * Writes the text/metadata half of a chunk (Location 1).
- * @param {object} firestore
- * @param {Array<object>} chunks  each { id, text, title, url, sourceId, category, index }
+ * @param firestore Firestore-shaped backend.
+ * @param chunks    each chunk carries `{ id, text, title, url, sourceId, category, index }`.
  */
-export async function writeTextFields(firestore, chunks) {
+export async function writeTextFields(firestore: Firestore, chunks: Chunk[]): Promise<void> {
   const batch = firestore.batch();
   for (const chunk of chunks) {
     batch.set(firestore.collection('chunks').doc(chunk.id), {
@@ -38,52 +49,57 @@ export async function writeTextFields(firestore, chunks) {
 
 /**
  * Embeds a batch of texts and merges the vector field (Location 2).
- *
- * @param {object} firestore
- * @param {Array<object>} chunks       each with `id` and `text`.
- * @param {object} embeddings          adapter with `embedMany(texts) -> Array<number[]>`.
- * @param {object} [opts]
- * @param {number} [opts.maxRetries=3]  429/5xx backoff retries per batch.
- * @param {number} [opts.retryBaseMs=50] base backoff (doubles each retry).
- * @returns {Promise<number>} number of vectors written.
+ * @param firestore   Firestore-shaped backend.
+ * @param chunks      each with `id` and `text`.
+ * @param embeddings  adapter with `embed(texts) -> Array<number[]>`.
+ * @param opts        `{ maxRetries = 3, retryBaseMs = 50 }` 429/5xx backoff per batch.
+ * @returns number of vectors written.
  */
-export async function writeVectors(firestore, chunks, embeddings, opts = {}) {
+export async function writeVectors(
+  firestore: Firestore,
+  chunks: Chunk[],
+  embeddings: Embedder,
+  opts: WriteVectorOptions = {},
+): Promise<number> {
   const maxRetries = opts.maxRetries ?? 3;
   const retryBaseMs = opts.retryBaseMs ?? 50;
-  const vectors = await embedWithRetry(chunks.map((c) => c.text), embeddings, {
-    maxRetries,
-    retryBaseMs,
-  });
+  const vectors = await embedWithRetry(chunks.map((c) => c.text), embeddings, { maxRetries, retryBaseMs });
 
   const batch = firestore.batch();
   chunks.forEach((chunk, i) => {
-    if (vectors[i]) {
+    const vec = vectors[i];
+    if (vec && vec.length > 0) {
       // Real Firestore requires the vector wrapped in FieldValue.vector() for
       // findNearest to query it. The fake stores a plain array (elements only).
       batch.set(
         firestore.collection('chunks').doc(chunk.id),
-        { embedding: FieldValue.vector(vectors[i]) },
+        { embedding: FieldValue.vector(vec) },
         { merge: true },
       );
     }
   });
   await batch.commit();
-  return vectors.filter(Boolean).length;
+  return vectors.filter((v) => Array.isArray(v) && v.length > 0).length;
 }
 
 /** Embed with retry/backoff on 429 or 5xx; throws a typed error after exhausting. */
-async function embedWithRetry(textsAll, embeddings, { maxRetries, retryBaseMs }) {
-  let lastErr;
+async function embedWithRetry(
+  textsAll: string[],
+  embeddings: Embedder,
+  { maxRetries, retryBaseMs }: { maxRetries: number; retryBaseMs: number },
+): Promise<number[][]> {
+  let lastErr: Error | undefined;
   for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
     try {
-      const vectors = await embeddings.embed(textsAll);
+      const vectors = (await embeddings.embed(textsAll)) as number[][];
       if (!Array.isArray(vectors)) throw new Error('embedding adapter returned non-array');
       return vectors;
     } catch (err) {
-      lastErr = err;
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      const embedErr = err as EmbedError;
       // Generic retryable errors are retried unless the adapter annotated a
       // non-retryable code.
-      if (err && typeof err.code === 'string' && isNonRetryable(err.code)) {
+      if (typeof embedErr.code === 'string' && isNonRetryable(embedErr.code)) {
         break;
       }
       if (maxRetries > 0) await sleep(retryBaseMs * 2 ** attempt);
@@ -93,10 +109,10 @@ async function embedWithRetry(textsAll, embeddings, { maxRetries, retryBaseMs })
 }
 
 /** Built-in non-retryable codes (adapter sets `code` on errors). */
-function isNonRetryable(err) {
-  return err.code === 'INVALID_ARGUMENT' || err.code === 'UNAUTHENTICATED' || err.code === 'FORBIDDEN';
+function isNonRetryable(err: string): boolean {
+  return err === 'INVALID_ARGUMENT' || err === 'UNAUTHENTICATED' || err === 'FORBIDDEN';
 }
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }

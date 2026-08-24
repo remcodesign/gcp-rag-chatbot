@@ -1,11 +1,16 @@
-// Domain 9 / Step 9.2 — ESLint flat config for the seed job package.
+// ESLint flat config for the seed job package (100% strict TypeScript, mirrors rag-api).
+// `@eslint/js` provides the recommended JS rules, and `@typescript-eslint`
+// handles `.ts` source/test files. `no-explicit-any` is an error so no `any`
+// can creep into the strict-TS job.
 import js from '@eslint/js';
+import tsParser from '@typescript-eslint/parser';
+import tsPlugin from '@typescript-eslint/eslint-plugin';
 
 export default [
-  { ignores: ['**/node_modules/**', 'coverage/**'] },
+  { ignores: ['node_modules/**', 'coverage/**', 'dist/**'] },
   js.configs.recommended,
 
-  // Shipped code.
+  // Shipped code: node globals + a small rule set (covers .js config/tooling files).
   {
     languageOptions: {
       ecmaVersion: 2022,
@@ -16,23 +21,59 @@ export default [
         URL: 'readonly',
         fetch: 'readonly',
         TextDecoder: 'readonly',
+        ReadableStream: 'readonly',
         AbortController: 'readonly',
         crypto: 'readonly',
       },
     },
     rules: {
       'no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-      'no-undef': 'off', // covered by TS types in tsc
+      'no-undef': 'off',
       'no-useless-assignment': 'off',
     },
   },
 
-  // Tests.
+  // TypeScript source (lib + src):
   {
-    files: ['test/**/*.js'],
+    files: ['lib/**/*.ts', 'src/**/*.ts'],
     languageOptions: {
-      ecmaVersion: 2022,
-      sourceType: 'module',
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+      },
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
+        TextDecoder: 'readonly',
+        ReadableStream: 'readonly',
+        AbortController: 'readonly',
+        crypto: 'readonly',
+        NodeJS: 'readonly',
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
+    rules: {
+      ...tsPlugin.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': 'off',
+    },
+  },
+
+  // Tests: vitest globals (describe/it/expect) + helper imports are intentional.
+  {
+    files: ['test/**/*.ts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: 'module',
+      },
       globals: {
         describe: 'readonly',
         it: 'readonly',
@@ -43,13 +84,19 @@ export default [
         vi: 'readonly',
         console: 'readonly',
         process: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
         setTimeout: 'readonly',
+        clearTimeout: 'readonly',
       },
     },
+    plugins: {
+      '@typescript-eslint': tsPlugin,
+    },
     rules: {
-      'no-undef': 'off',
-      'no-unused-vars': 'off',
-      'no-useless-assignment': 'off',
+      ...tsPlugin.configs.recommended.rules,
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
 ];
