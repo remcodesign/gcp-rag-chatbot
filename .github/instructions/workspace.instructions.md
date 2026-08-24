@@ -11,7 +11,7 @@ description: "Use when working in the Demo RAG Northwind Outfitters demo (GCP + 
 >
 > **VERY IMPORTANT — Do not use GIT commit and push yourself - only use GIT for checking state and history:**
 >
-> **VERY IMPORTANT — use 100% strict TypeScript where possible, (frontend) only use Tailwind styling - only use (scoped) CSS if it is really needed**
+> **VERY IMPORTANT — use `100% strict TypeScript` where possible, `.ts` files and non usage of `any`, (frontend) only use `TailwindCSS` styling - but can use (scoped) CSS if it is really needed**
 
 # Demo RAG Northwind Outfitters — workspace guidelines
 
@@ -25,7 +25,7 @@ not be reintroduced.
 - **NO Cloud SQL, NO VPC connector/network, NO BigQuery.** Google public network only; GCP footprint ≈ €0/mo.
 - **Terraform is the SOLE deployment controller** — never `gcloud run deploy`. `infra/` owns all GCP resources; the app packages own none.
 - **Releases are never a static `:latest`.** Every release pins a git-**short-SHA** tag committed to `infra/terraform.tfvars`.
-- **100% strict TypeScript on the frontend; TypeScript-checked Node.js on the backend.** `frontend/` is `.ts` only, no `any`, gated by `vue-tsc` + ESLint `no-explicit-any`. `rag-api`/`rag-ingest` stay `.js` but are type-checked with `tsc --noEmit` + `checkJs` (module/export gate) + a startup smoke test. No new `.js` app files should be added to `frontend/`.
+- **100% strict TypeScript in `frontend/` AND `rag-api/`; TypeScript-checked `.js` in `rag-ingest`.** `frontend/` is `.ts` only, no `any`, gated by `vue-tsc` + ESLint `no-explicit-any`. `rag-api` is `.ts` only, no `any`, `strict:true`, compiled to `dist/`; `rag-ingest` stays `.js` but is type-checked with `tsc --noEmit` + `checkJs` (module/export gate) + a startup smoke test. No new `.js` app files should be added to `frontend/` or `rag-api/lib|src|test|scripts`.
 
 ## Environment (must all agree)
 | Item | Value |
@@ -41,10 +41,13 @@ not be reintroduced.
 | Health | `/livez` (200), `/readyz` (503 when Firestore down); `/healthz` is reserved by Cloud Run edge |
 
 ## Node conventions (`rag-api/`, `rag-ingest/`)
-- **ESM** (`"type": "module"`), **vitest** for tests. Each package has its own `vitest.config.js` → `test/**/*.test.js`.
-- **Type-checked JS (TypeScript for Node, no rewrite):** every Node package has a `tsconfig.json` with `checkJs: true` + `module: NodeNext` + `noEmit`, and a `typecheck` script (`tsc --noEmit`). This is a **module/export-resolution gate** — a dangling import/export fails `npm run typecheck` BEFORE the image is pushed (the 2026-08 `validateCitations` crash). Keep `noImplicitAny` OFF here: the factory-via-DI code returns plain `object`, so full strict surfaces ~200 noise diagnostics not worth chasing. This is *deliberately different* from the frontend (below).
-- Public API: `lib/<domain>/index.js` re-exports a **factory via DI** + constants + errors. Pattern: `create*Store({deps}, options)` — `options` is ALWAYS the second arg.
-- **Tests need zero cloud credentials** — use in-memory Firestore-shaped fakes (`test/fakes/fakeFirestore.js`, incl. `findNearest`, `batch().commit()`, `runTransaction`). Inject fake clock / short TTL for determinism; never use real timers.
+- **ESM** (`"type": "module"`), **vitest** for tests. Each package has its own `vitest.config.js` → `test/**/*.test.ts`.
+- **`rag-api` is 100% strict TypeScript — NO `.js` files in `lib/`, `src/`, `test/`, and NO `any` anywhere** (ESLint enforces `@typescript-eslint/no-explicit-any: 'error'`). `tsconfig.json` is `strict: true`, `noImplicitAny: true`, `verbatimModuleSyntax`. It compiles to `dist/` via `tsconfig.build.json` (`npm run build`); the Dockerfile compiles in a build stage and runs `node dist/src/server.js`. Shared cross-module types live in the `lib/types/` folder — `firestore.ts`, `rag.ts`, `chat.ts`, `state.ts`, `trace.ts` — imported **directly** by domain file (no barrel), e.g. `import type { Hit } from '../types/rag.js'`.
+- **`rag-ingest` stays type-checked `.js`** — `checkJs: true` + `module: NodeNext` + `noEmit` as a module/export gate (the 2026-08 `validateCitations` crash class). Keep `noImplicitAny` OFF there: `strict` would surface noise. Only `frontend/` + `rag-api/` are strict TS.
+- **NodeNext ESM gotcha:** source files are `.ts` but import specifiers keep the **`.js` suffix** (what `tsc` emits and what Node's ESM resolution expects). Vite/vitest does NOT map `.js`→`.ts` by default, so `vitest.config.js` ships a tiny `resolveJsImportsToTs` plugin to rewrite `.js` specifiers to `.ts` during tests.
+- **`rag-api` has NO `smoke` script** — its compile step (`tsc -p tsconfig.build.json`, `npm run build`) IS the module/export resolve guard: strict TS + `noImplicitAny` fail on a dangling import/export before push. `rag-ingest` (checkJs `.js`) keeps `scripts/smoke.js` for the same purpose.
+- Public API: `lib/<domain>/index.ts` re-exports a **factory via DI** + constants + errors. Pattern: `create*Store({deps}, options)` — `options` is ALWAYS the second arg.
+- **Tests need zero cloud credentials** — use in-memory Firestore-shaped fakes (`test/fakes/fakeFirestore.ts`, incl. `findNearest`, `batch().commit()`, `runTransaction`), typed against the `Firestore` interface in `lib/types/firestore.ts`. Inject fake clock / short TTL for determinism; never use real timers.
 - OpenRouter calls use Node built-in `fetch` (no new SDK dependency); Bearer from env `OPENROUTER_API_KEY` — never bake into the image, never log. Redact prompts/keys; log only model/count/latency.
 - Error handling: non-retryable `.statusCode` abort (`INVALID_ARGUMENT`, `UNAUTHENTICATED`, `FORBIDDEN`); retry 429/5xx with `retryBaseMs * 2**attempt`. `normalizeError(err)` → `{message, statusCode, retryable}`.
 - SSE: failure at end-of-series = SSE `error` event, **NOT** an HTTP 500. Mid-stream failures → regenerate info, never re-splice, capped `maxRegenRetries`. LLM citations are untrusted — `validateCitations` strips inline `[Source N]` not in the `sourceMap`.
@@ -55,7 +58,7 @@ not be reintroduced.
 - Type-check = `npm run typecheck` → **`vue-tsc --noEmit`** (`tsconfig.json`: `strict: true`, `noImplicitAny: true`, `verbatimModuleSyntax` — so all type-only imports must use `import type`). ESLint enforces `@typescript-eslint/no-explicit-any: 'error'`.
 - **Styling is 100% Tailwind utilities in `App.vue`** — do NOT add component classes to `src/style.css`. `style.css` is only the `@import 'tailwindcss'` + `@theme`/`:root` tokens + `body` reset. Theme tokens are referenced via `var(--accent)` etc. in arbitrary-key utilities (`bg-[var(--accent)]`) and in the small scoped `<style>` that styles the `v-html` markdown output (`.answer`/`.citation`).
 - SSE `frame.data` is `unknown` and **narrowed** at each consumer — never `any`.
-- Do NOT migrate `rag-api`/`rag-ingest` to `.ts` by default — they stay JS but are type-checked (`checkJs`). Only `frontend/` is strict TS.
+- `rag-api` IS now strict TS (like `frontend/`): no `.js` app files, no `any`. `rag-ingest` remains type-checked `.js` (`checkJs`) — do NOT migrate it to `.ts` unless asked.
 - Keep `@typescript-eslint` + `vue-eslint-parser` in the flat ESLint config (required for `.ts` + `.vue` parsing).
 
 ## Terraform / deploy conventions
@@ -79,7 +82,7 @@ not be reintroduced.
 ## Quick references (canonical)
 ```bash
 # Type-checking (all packages gated in deploy.sh):
-cd rag-api    && npm run typecheck && npm run lint && npm run smoke && npm test   # ~70 tests, no creds
+cd rag-api    && npm run typecheck && npm run lint && npm test && npm run build   # ~70 tests, no creds; build IS the strict-TS resolve guard
 cd rag-ingest && npm run typecheck && npm run lint && npm run smoke && npm test   # ~13 tests, no creds
 cd frontend   && npm run typecheck && npm run lint && npm test && npm run build   # strict TS, ~41 tests (vue-tsc)
 

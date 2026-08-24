@@ -85,34 +85,34 @@ build_image() {
 
 build_all() {
   # Domain 9 / Step 9.5 — gate every image build on the tooling suite.
-  # Runs, in order: typecheck -> lint -> smoke -> test -> build. Any failure
+  # Runs, in order: typecheck -> lint -> (smoke) -> test -> build. Any failure
   # exits non-zero and aborts before an image is pushed, so a broken export
-  # (the 2026-08 `validateCitations` JSDoc case) fails HERE, never at Cloud
-  # Run boot. Per-package dirs because tsconfig/eslint + npm scripts are
-  # per-package (NodeNext module graph / Vite).
-  run_checks rag-api
+  # (the 2026-08 `validateCitations` case) fails HERE, never at Cloud Run boot.
+  #
+  # rag-api is strict TS: its resolve/compile guard is `tsc -p tsconfig.build.json`
+  # (`check_build=1`), so it has NO separate smoke script. rag-ingest is still
+  # checkJs `.js` and keeps its `scripts/smoke.js` import guard. The frontend's
+  # resolve guard is `vite build` (check_build=1).
+  run_checks rag-api 1
   run_checks rag-ingest
-  # The frontend has NO standalone smoke script: its module-resolution guard IS
-  # `vite build` (Step 9.4), which resolves the whole entry graph from main.js
-  # -> App.vue. `check_build=1` runs typecheck + lint + test + build below.
-  run_checks frontend 1      # frontend also runs its prod `vite build`
+  run_checks frontend 1
   build_image rag-api rag-api
   build_image rag-ingest rag-ingest
   build_image frontend rag-frontend
 }
 
 # Domain 9 / Step 9.5 — the tooling gate.
-# order: typecheck -> lint -> smoke -> test -> (build).
-# `check_build=1` additionally runs the package's prod build (used for the
-# frontend, where `vite build` is the module-resolution guard that replaces a
-# standalone smoke script).
+# order: typecheck -> lint -> (smoke) -> test -> build.
+# A package runs `npm run smoke` when it has `scripts/smoke.[jt]s` (the Node
+# checkJs packages) — the compiled `tsc`/`vite build` (`check_build=1`) is the
+# resolve guard for the strict-TS packages that ship distilled output.
 run_checks() {
   local dir="$1" check_build="${2:-0}"
   echo "==> Checks: ${dir}"
   ( cd "$ROOT/$dir" && npm run typecheck )
   ( cd "$ROOT/$dir" && npm run lint )
-  # Only the Node packages have a `smoke` script (they ship raw `.js`, no
-  # bundler). The frontend relies on `vite build` below for resolution.
+  # Only the Node checkJs packages carry a standalone `smoke` script (they
+  # import every entrypoint into real ESM to catch runtime-import failures).
   if [[ -f "$ROOT/$dir/scripts/smoke.js" ]]; then
     ( cd "$ROOT/$dir" && npm run smoke )
   fi

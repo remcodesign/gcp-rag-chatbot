@@ -20,7 +20,7 @@ now lets build and document `docs`:
 >
 > **VERY IMPORTANT — Do not use GIT commit and push yourself - only use GIT for checking state and history:**
 >
-> **VERY IMPORTANT — use 100% strict TypeScript where possible, (frontend) only use Tailwind styling - only use (scoped) CSS if it is really needed**
+> **VERY IMPORTANT — use `100% strict TypeScript` where possible, `.ts` files and non usage of `any`, (frontend) only use `TailwindCSS` styling - but can use (scoped) CSS if it is really needed**
 
 ### 1.1 Read Project I
 
