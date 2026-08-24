@@ -91,15 +91,15 @@ function newSession(): void {
         <h1 class="m-0 text-xl">Northwind Outfitters — Support Chat</h1>
         <div class="flex items-center gap-2">
           <button
-            class="cursor-pointer rounded-lg border border-[var(--border)] px-3 py-1.5 text-[color:var(--text)]"
+            class="cursor-pointer rounded-lg border border-(--border) px-3 py-1.5 text-(--text)"
             @click="showTracePanel = !showTracePanel"
             :aria-expanded="showTracePanel"
           >
-            <span class="mr-1.5 inline-block h-2 w-2 rounded-full bg-[var(--accent)] align-middle" aria-hidden="true"></span>
+            <span class="mr-1.5 inline-block h-2 w-2 rounded-full bg-(--accent) align-middle" aria-hidden="true"></span>
             {{ showTracePanel ? 'Hide RAG trace' : 'RAG trace' }}
           </button>
           <button
-            class="cursor-pointer rounded-lg border border-[var(--border)] px-3 py-1.5 text-[color:var(--text)] disabled:cursor-default disabled:opacity-50"
+            class="cursor-pointer rounded-lg border border-(--border) px-3 py-1.5 text-(--text) disabled:cursor-default disabled:opacity-50"
             @click="newSession"
             :disabled="isStreaming"
           >New session</button>
@@ -107,27 +107,27 @@ function newSession(): void {
       </header>
 
       <!-- Progress indicator (Step 6.2) -->
-      <div v-if="isStreaming" class="flex items-center gap-3 text-sm text-[color:var(--muted)]" role="status" aria-live="polite">
+      <div v-if="isStreaming" class="flex items-center gap-3 text-sm text-(--muted)" role="status" aria-live="polite">
         <span>{{ stageLabel }}</span>
-        <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-[var(--border)]">
+        <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-(--border)">
           <span
-            class="block h-full bg-[var(--accent)] transition-[width] duration-300"
+            class="block h-full bg-(--accent) transition-[width] duration-300"
             :style="{ width: progress + '%' }"
           ></span>
         </span>
       </div>
 
       <!-- Error banner (Step 6.1 non-happy) -->
-      <div v-if="isError" class="flex items-center justify-between gap-3 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] px-4 py-3 text-[color:var(--danger)]" role="alert">
+      <div v-if="isError" class="flex items-center justify-between gap-3 rounded-lg border border-(--danger) bg-(--danger-soft) px-4 py-3 text-(--danger)" role="alert">
         <p class="m-0">{{ error }}</p>
         <button
-          class="cursor-pointer rounded-lg bg-[var(--danger)] px-3 py-1.5 text-white"
+          class="cursor-pointer rounded-lg bg-(--danger) px-3 py-1.5 text-white"
           @click="retry"
         >Retry</button>
       </div>
 
-      <section class="min-h-0 flex-1 overflow-y-auto rounded-xl border border-[var(--border)] bg-[var(--panel)] p-5">
-        <div v-if="!store.state.answer && !isStreaming" class="text-[color:var(--muted)]">
+      <section class="min-h-0 flex-1 overflow-y-auto rounded-xl border border-(--border) bg-(--panel) p-5">
+        <div v-if="!store.state.answer && !isStreaming" class="text-(--muted)">
           Ask about returns, warranty, sizing, or product setup.
         </div>
 
@@ -135,12 +135,12 @@ function newSession(): void {
         <div v-if="store.state.answer" class="answer leading-normal" v-html="answerHtml"></div>
 
         <!-- Source chips (Step 6.4) — click opens the chunk in a modal -->
-        <div v-if="chips.length" class="mt-5 flex flex-wrap items-center gap-2 border-t border-[var(--border)] pt-4">
-          <span class="text-[13px] text-[color:var(--muted)]">Sources</span>
+        <div v-if="chips.length" class="mt-5 flex flex-wrap items-center gap-2 border-t border-(--border) pt-4">
+          <span class="text-[13px] text-(--muted)">Sources</span>
           <button
             v-for="c in chips"
             :key="c.n"
-            class="cursor-pointer rounded-full border border-transparent bg-[var(--accent-soft)] px-3 py-1 text-[13px] text-[color:var(--accent)] hover:underline"
+            class="cursor-pointer rounded-full border border-transparent bg-(--accent-soft) px-3 py-1 text-[13px] text-(--accent) hover:underline"
             type="button"
             :title="c.title"
             @click="openChunk(c)"
@@ -155,11 +155,11 @@ function newSession(): void {
           placeholder="Ask a question…"
           :disabled="isStreaming"
           autocomplete="off"
-          class="flex-1 rounded-[10px] border border-[var(--border)] px-3.5 py-3 text-[15px]"
+          class="flex-1 rounded-[10px] border border-(--border) bg-(--panel) px-3.5 py-3 text-[15px] shadow-[0_1px_2px_rgba(16,24,40,0.06),0_4px_10px_rgba(16,24,40,0.05)] placeholder:text-(--muted)"
         />
         <button
           type="submit"
-          class="cursor-pointer rounded-[10px] bg-[var(--accent)] px-5 text-white disabled:cursor-default disabled:opacity-50"
+          class="cursor-pointer rounded-[10px] bg-(--accent) px-5 text-white disabled:cursor-default disabled:opacity-50"
           :disabled="isStreaming || !input.trim()"
         >Send</button>
       </form>
@@ -168,52 +168,52 @@ function newSession(): void {
     <Transition name="drawer">
       <aside
         v-if="showTracePanel"
-        class="trace-panel fixed bottom-[84px] right-0 top-0 z-30 flex w-[min(380px,92vw)] flex-col border-l border-[var(--border)] bg-[var(--panel)] shadow-[_-6px_0_24px_rgba(0,0,0,0.12)] lg:static lg:h-full lg:w-[340px] lg:shrink-0 lg:rounded-xl lg:border lg:bg-[var(--panel)] lg:shadow-none"
+        class="trace-panel fixed bottom-[84px] right-0 top-0 z-30 flex w-[min(380px,92vw)] flex-col border-l border-(--border) bg-(--panel) shadow-[_-6px_0_24px_rgba(0,0,0,0.12)] lg:static lg:h-full lg:w-[340px] lg:shrink-0 lg:rounded-xl lg:border lg:bg-(--panel) lg:shadow-none"
         aria-label="RAG trace details"
       >
-        <div class="flex flex-none items-center justify-between border-b border-[var(--border)] px-4 py-3.5">
+        <div class="flex flex-none items-center justify-between border-b border-(--border) px-4 py-3.5">
           <h2 class="m-0 text-[15px]">RAG trace</h2>
           <button
-            class="cursor-pointer border-none bg-transparent text-[22px] leading-none text-[color:var(--muted)] hover:text-[color:var(--text)]"
+            class="cursor-pointer border-none bg-transparent text-[22px] leading-none text-(--muted) hover:text-(--text)"
             @click="showTracePanel = false"
             aria-label="Close RAG trace"
           >×</button>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto p-4">
-          <p v-if="!trace" class="text-[14px] text-[color:var(--muted)]">
+          <p v-if="!trace" class="text-[14px] text-(--muted)">
             No RAG trace yet — ask a question to see retrieval, rerank, context and the final prompt.
           </p>
 
           <template v-else>
-            <section v-if="trace.error" class="mb-4 rounded-lg border border-[var(--danger)] bg-[var(--danger-soft)] px-3 py-2.5 text-[12px] text-[color:var(--danger)]" role="alert">
+            <section v-if="trace.error" class="mb-4 rounded-lg border border-(--danger) bg-(--danger-soft) px-3 py-2.5 text-[12px] text-(--danger)" role="alert">
               Retrieval failed — answering without context. {{ trace.error.message }}
             </section>
 
             <div class="mb-4">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-[color:var(--muted)]">Query</h3>
+              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Query</h3>
               <p class="m-0 mb-1 text-[14px] font-semibold">{{ trace.query }}</p>
-              <p class="my-0.5 text-[12px] text-[color:var(--muted)]">Classification: {{ trace.classification }}</p>
+              <p class="my-0.5 text-[12px] text-(--muted)">Classification: {{ trace.classification }}</p>
             </div>
 
             <div class="mb-4">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-[color:var(--muted)]">Retrieval ({{ trace.retrieved.length }})</h3>
+              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Retrieval ({{ trace.retrieved.length }})</h3>
               <ul class="m-0 flex list-none flex-col gap-2 p-0">
                 <li
                   v-for="c in trace.retrieved"
                   :key="c.id"
-                  class="rounded-lg border border-[var(--border)] px-2.5 py-2"
+                  class="rounded-lg border border-(--border) px-2.5 py-2"
                   :class="{ 'opacity-55': !c.keptInContext }"
                 >
                   <div class="flex items-center gap-2">
-                    <span class="rounded bg-[var(--accent-soft)] px-1.5 text-[11px] font-bold text-[color:var(--accent)]">#{{ c.rank }}</span>
+                    <span class="rounded bg-(--accent-soft) px-1.5 text-[11px] font-bold text-(--accent)">#{{ c.rank }}</span>
                     <button
-                      class="min-w-0 flex-1 cursor-pointer bg-transparent p-0 text-left text-[13px] font-semibold text-[color:var(--text)] hover:text-[color:var(--accent)] hover:underline"
+                      class="min-w-0 flex-1 cursor-pointer bg-transparent p-0 text-left text-[13px] font-semibold text-(--text) hover:text-(--accent) hover:underline"
                       type="button"
                       @click="openChunk(c)"
                     >{{ c.title }}</button>
-                    <span class="text-[12px] font-semibold text-[color:var(--muted)]">{{ formatScore(c.score) }}</span>
+                    <span class="text-[12px] font-semibold text-(--muted)">{{ formatScore(c.score) }}</span>
                   </div>
-                  <div class="my-0.5 text-[11px] text-[color:var(--muted)]">
+                  <div class="my-0.5 text-[11px] text-(--muted)">
                     {{ c.chars }} chars · {{ c.keptInContext ? 'in context' : 'dropped' }}
                   </div>
                   <p class="m-0 mt-1 text-[12px] leading-[1.45] whitespace-pre-wrap text-[#3b4757]">{{ c.textPreview }}</p>
@@ -222,26 +222,26 @@ function newSession(): void {
             </div>
 
             <div class="mb-4">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-[color:var(--muted)]">Rerank</h3>
-              <p class="my-0.5 text-[12px] text-[color:var(--muted)]">
+              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Rerank</h3>
+              <p class="my-0.5 text-[12px] text-(--muted)">
                 {{ trace.rerank.didRerank ? 'Reranked' : 'Skipped rerank' }} — {{ trace.rerank.reason }}
               </p>
-              <p v-if="trace.timings" class="my-0.5 text-[12px] text-[color:var(--muted)]">
+              <p v-if="trace.timings" class="my-0.5 text-[12px] text-(--muted)">
                 Embed {{ trace.timings.embed }}ms · Retrieve {{ trace.timings.retrieval }}ms ·
                 Rerank {{ trace.timings.rerank }}ms
               </p>
             </div>
 
             <div class="mb-4">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-[color:var(--muted)]">Context passed to LLM ({{ trace.context.sources.length }})</h3>
-              <ol class="m-0 pl-4 text-[12px] text-[color:var(--muted)]">
+              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Context passed to LLM ({{ trace.context.sources.length }})</h3>
+              <ol class="m-0 pl-4 text-[12px] text-(--muted)">
                 <li v-for="s in trace.context.sources" :key="s.id" class="my-0.5">{{ s.id }}</li>
               </ol>
             </div>
 
             <div v-if="trace.finalPrompt" class="mb-4">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-[color:var(--muted)]">Final prompt</h3>
-              <pre class="m-0 max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-[var(--border)] bg-[var(--bg)] px-2.5 py-2.5 text-[11px] text-[color:var(--text)]">{{ trace.finalPrompt }}</pre>
+              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Final prompt</h3>
+              <pre class="m-0 max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-(--border) bg-(--bg) px-2.5 py-2.5 text-[11px] text-(--text)">{{ trace.finalPrompt }}</pre>
             </div>
           </template>
         </div>
@@ -258,22 +258,22 @@ function newSession(): void {
         aria-modal="true"
         aria-label="Source chunk"
       >
-        <div class="flex max-h-[82vh] w-[min(680px,100%)] flex-col overflow-hidden rounded-xl bg-[var(--panel)] shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-          <div class="flex flex-none items-center justify-between border-b border-[var(--border)] px-4.5 py-3.5">
+        <div class="flex max-h-[82vh] w-[min(680px,100%)] flex-col overflow-hidden rounded-xl bg-(--panel) shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+          <div class="flex flex-none items-center justify-between border-b border-(--border) px-4.5 py-3.5">
             <h2 class="m-0 text-[16px] font-bold">{{ modal.title }}</h2>
             <button
-              class="cursor-pointer border-none bg-transparent text-2xl leading-none text-[color:var(--muted)] hover:text-[color:var(--text)]"
+              class="cursor-pointer border-none bg-transparent text-2xl leading-none text-(--muted) hover:text-(--text)"
               type="button"
               @click="closeChunk"
               aria-label="Close"
             >×</button>
           </div>
           <div class="modal-body overflow-y-auto p-4 px-4.5">
-            <p class="my-0 mb-3 break-all text-[12px] text-[color:var(--muted)]">
+            <p class="my-0 mb-3 break-all text-[12px] text-(--muted)">
               <span v-if="modal.score != null">score {{ formatScore(modal.score) }} · </span>
-              <code class="rounded bg-[var(--accent-soft)] px-1">{{ modal.id }}</code>
+              <code class="rounded bg-(--accent-soft) px-1">{{ modal.id }}</code>
               <template v-if="modal.url && modal.url !== '#'">
-                · <a class="text-[color:var(--accent)]" :href="modal.url" target="_blank" rel="noopener">open page</a>
+                · <a class="text-(--accent)" :href="modal.url" target="_blank" rel="noopener">open page</a>
               </template>
             </p>
             <div class="answer leading-normal" v-html="modalHtml"></div>
@@ -326,15 +326,44 @@ function newSession(): void {
 }
 .answer :deep(a) { color: var(--accent); }
 
+/* Tables rendered from markdown inside the answer. */
+.answer :deep(table) {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75em 0;
+  font-size: 0.95em;
+}
+.answer :deep(th), .answer :deep(td) {
+  border: 1px solid var(--border);
+  padding: 0.5em 0.7em;
+}
+.answer :deep(th) {
+  text-align: left;
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+.answer :deep(tr:nth-child(even) td) {
+  background: var(--bg);
+}
+
 /* Citation chips inserted by renderAnswer into the marked-up answer. */
 .answer :deep(.citation) {
   display: inline-block;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 5px;
+  font-size: 0.8em;
+  font-weight: 500;
+  vertical-align: baseline;
+  line-height: 1.4;
+}
+.answer :deep(.citation:hover) {
   background: var(--accent-soft);
   color: var(--accent);
-  border-radius: 6px;
-  padding: 0 6px;
-  font-size: 0.85em;
-  font-weight: 600;
+  border-color: transparent;
+  cursor: pointer;
 }
 
 /* Modal body padding-below so the content isn't flush against the bottom. */

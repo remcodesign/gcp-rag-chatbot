@@ -57,6 +57,24 @@ export default [
     rules: tsRules,
   },
 
+  // Root build/tooling config files (vite.config.js/.ts, etc.) run in Node.
+  {
+    files: ['*.config.js', '*.config.ts'],
+    plugins: tsPluginConfig,
+    languageOptions: {
+      parser: ts,
+      parserOptions: { ecmaVersion: 2022, sourceType: 'module' },
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        __dirname: 'readonly',
+        module: 'readonly',
+        require: 'readonly',
+      },
+    },
+    rules: tsRules,
+  },
+
   // Tests (vitest in node env).
   {
     files: ['test/**/*.ts'],
