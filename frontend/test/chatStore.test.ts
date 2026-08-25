@@ -304,4 +304,33 @@ describe('chatStore — conversation turns (Domain 10)', () => {
     expect(store.state.turnCount).toBe(0);
     expect(store.state.conversationEnded).toBe(false);
   });
+
+  it('builds a transcript of my messages + assistant replies', async () => {
+    const send = makeSend([
+      [token(2, 'Antwoord een'), done(3)],
+      [token(4, 'Antwoord twee'), done(5)],
+    ]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    await store.sendMessage({ sessionId: 's1', query: 'vraag 1' });
+    expect(store.state.messages).toHaveLength(2);
+    expect(store.state.messages[0]).toMatchObject({ role: 'user', content: 'vraag 1' });
+    expect(store.state.messages[1]).toMatchObject({ role: 'assistant', content: 'Antwoord een' });
+    expect(typeof store.state.messages[0]?.createdAt).toBe('number');
+    await store.sendMessage({ sessionId: 's1', query: 'vraag 2' });
+    expect(store.state.messages).toHaveLength(4);
+    expect(store.state.messages[3]).toMatchObject({ role: 'assistant', content: 'Antwoord twee' });
+  });
+
+  it('ends the conversation automatically on the last allowed turn', async () => {
+    // 5 real answers -> after the 5th, conversationEnded is true without a 6th call.
+    const frames = (call: number): TestFrame[] => [token(2 + call, `antwoord ${call + 1}`), done(3 + call)];
+    const send = makeSend([frames(0), frames(1), frames(2), frames(3), frames(4)]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    for (let i = 1; i <= 5; i += 1) {
+      await store.sendMessage({ sessionId: 's1', query: `vraag ${i}` });
+    }
+    expect(store.state.turnCount).toBe(5);
+    expect(store.state.conversationEnded).toBe(true);
+    expect(store.state.messages).toHaveLength(10);
+  });
 });

@@ -47,6 +47,20 @@ export interface ChatError {
   detail?: unknown;
 }
 
+/**
+ * One completed turn bubble in the WhatsApp-style transcript. `role` picks the
+ * layout: my messages are right-aligned bubbles, assistant replies are
+ * full-width without a bubble.
+ */
+export interface ConversationMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  /** epoch ms when the message was completed/sent. */
+  createdAt: number;
+  /** Resolved sources cited by an assistant reply (empty for user messages). */
+  sources: Source[];
+}
+
 /** The reactive chat state exposed to the UI. */
 export interface ChatState {
   status: ChatStatus;
@@ -59,6 +73,8 @@ export interface ChatState {
   error: ChatError | null;
   lastEventId: number | null;
   retryCount: number;
+  /** Completed conversation transcript (my messages + assistant replies). */
+  messages: ConversationMessage[];
   /** Number of completed assistant turns in this conversation (X in "X / 5"). */
   turnCount: number;
   /** Whether the conversation limit was reached (server sent the end message). */

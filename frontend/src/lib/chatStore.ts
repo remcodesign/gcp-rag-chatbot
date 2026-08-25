@@ -88,6 +88,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     error: null,
     lastEventId: null,
     retryCount: 0,
+    messages: [],
     turnCount: 0,
     conversationEnded: false,
   });
@@ -149,6 +150,17 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
         // A real assistant reply counts as one turn toward the session cap.
         if (state.answer.trim().length > 0) {
           state.turnCount += 1;
+          state.messages.push({
+            role: 'assistant',
+            content: state.answer,
+            createdAt: Date.now(),
+            sources: done.sources ?? [],
+          });
+          // This was the last allowed turn -> end the conversation now, so the
+          // warning shows above the thread and the form stays locked.
+          if (state.turnCount >= MAX_CONVERSATION_TURNS) {
+            state.conversationEnded = true;
+          }
         }
         break;
       }
@@ -209,6 +221,14 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     state.retryCount = 0;
     state.lastEventId = null;
     state.conversationEnded = false;
+    // Stable timestamp so the transcript shows a sensible time for this turn.
+    const now = Date.now();
+    state.messages.push({
+      role: 'user',
+      content: q,
+      createdAt: now,
+      sources: [],
+    });
 
     for (;;) {
       const { ok } = await runStream();
@@ -258,6 +278,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     state.error = null;
     state.lastEventId = null;
     state.retryCount = 0;
+    state.messages = [];
     state.turnCount = 0;
     state.conversationEnded = false;
   }

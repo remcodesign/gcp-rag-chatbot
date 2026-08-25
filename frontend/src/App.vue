@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch, nextTick } from 'vue';
 import { createChatStore, STATUS, MAX_CONVERSATION_TURNS } from './lib/chatStore';
 import { STAGE_LABELS } from './lib/chatStore';
 import { openSseStream } from './lib/sseTransport';
-import { renderAnswer, buildSourceChips } from './lib/citations';
+import { renderAnswer } from './lib/citations';
 import { resolveApiBase, resolveTraceEnabled } from './lib/config';
 import { normalizeTrace, formatScore, formatTokensPerSecond, formatCost, timingBars } from './lib/trace';
 import { SAMPLE_GROUPS } from './lib/sampleQuestions';
@@ -27,13 +27,32 @@ const store = createChatStore({
 const input = ref('');
 const sessionId = ref(crypto.randomUUID());
 
+// The scrollable chat thread container; auto-scrolled to the bottom on new
+// content so later answers stay in view.
+const threadEl = ref<HTMLElement | null>(null);
+
+/** Smooth-scrolls the chat thread to the bottom (as far as content reaches). */
+function scrollThreadToBottom(): void {
+  const el = threadEl.value;
+  if (!el) return;
+  el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+}
+
+// Scroll on every new/streaming message and on each finished turn.
+watch(
+  () => store.state.messages.length,
+  () => void nextTick(scrollThreadToBottom),
+);
+watch(
+  () => store.state.answer,
+  () => void nextTick(scrollThreadToBottom),
+);
+
 const status = computed(() => store.state.status);
 const stageLabel = computed(() =>
   store.state.stage ? STAGE_LABELS[store.state.stage] ?? store.state.stage : ''
 );
 const progress = computed(() => store.state.progress);
-const answerHtml = computed(() => renderAnswer(store.state.answer));
-const chips = computed(() => buildSourceChips(store.state.sources));
 const error = computed(() => store.state.error);
 const errorMessage = computed(() => error.value?.message ?? '');
 const errorDetail = computed(() => error.value?.detail ?? null);
@@ -52,6 +71,20 @@ const conversationEnded = computed(() => store.state.conversationEnded);
 const canAsk = computed(() =>
   !conversationEnded.value && turnCount.value < MAX_CONVERSATION_TURNS,
 );
+
+/** The WhatsApp-style transcript (my right bubbles + assistant full-width). */
+const transcript = computed(() => store.state.messages);
+
+/** Formats an epoch-ms timestamp as `HH:MM` (local). */
+function formatTime(ts: number): string {
+  const d = new Date(ts);
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+
+/** Renders one message body (markdown for assistant, plain for user). */
+function renderMessageHtml(content: string, role: 'user' | 'assistant'): string {
+  return role === 'assistant' ? renderAnswer(content) : content;
+}
 
 /** Whether any token-usage / token-speed data is available to render. */
 const hasUsage = computed(() => {
@@ -225,25 +258,57 @@ function newSession(): void {
         >Retry</button>
       </div>
 
-      <section class="no-scrollbar min-h-0 flex-1 overflow-y-auto rounded-xl border border-(--border) bg-(--panel) p-5">
-        <div v-if="!store.state.answer && !isStreaming" class="text-(--muted)">
+      <section
+        ref="threadEl"
+        class="no-scrollbar min-h-0 flex-1 overflow-y-auto rounded-xl border border-(--border) bg-(--panel) p-5"
+      >
+        <div v-if="transcript.length === 0" class="text-(--muted)">
           Ask about returns, warranty, sizing, or product setup.
         </div>
 
-        <!-- Streamed answer with inline citations (Step 6.1 + 6.4) -->
-        <div v-if="store.state.answer" class="answer leading-normal" v-html="answerHtml"></div>
+        <!-- WhatsApp-style transcript: my messages as right bubbles, the
+             assistant full-width without a bubble. -->
+        <div v-else class="flex flex-col gap-4">
+          <div
+            v-for="(m, i) in transcript"
+            :key="i"
+            class="flex flex-col"
+            :class="m.role === 'user' ? 'items-end' : 'items-start'"
+          >
+            <!-- Small line with the sender + time, above each message -->
+            <div
+              class="mb-1 flex items-center gap-1.5 text-[11px] text-(--muted)"
+              :class="m.role === 'user' ? 'flex-row-reverse' : 'flex-row'"
+            >
+              <span class="font-semibold">{{ m.role === 'user' ? 'Jij' : 'Northwind Assistent' }}</span>
+              <span aria-hidden="true">·</span>
+              <span>{{ formatTime(m.createdAt) }}</span>
+            </div>
 
-        <!-- Source chips (Step 6.4) — click opens the chunk in a modal -->
-        <div v-if="chips.length" class="mt-5 flex flex-wrap items-center gap-2 border-t border-(--border) pt-4">
-          <span class="text-[13px] text-(--muted)">Sources</span>
-          <button
-            v-for="c in chips"
-            :key="c.n"
-            class="cursor-pointer rounded-full border border-transparent bg-(--accent-soft) px-3 py-1 text-[13px] text-(--accent) hover:underline"
-            type="button"
-            :title="c.title"
-            @click="openChunk(c)"
-          >[Source {{ c.n }}] {{ c.title }}</button>
+            <!-- User: right-aligned bubble. Assistant: full-width, no bubble. -->
+            <div
+              v-if="m.role === 'user'"
+              class="max-w-[80%] rounded-2xl rounded-br-md bg-(--accent) px-3.5 py-2.5 text-white shadow-sm"
+            >
+              <p class="m-0 whitespace-pre-wrap text-[14px] leading-[1.45]">{{ m.content }}</p>
+            </div>
+
+            <div v-else class="w-full">
+              <div class="answer leading-normal text-(--text)" v-html="renderMessageHtml(m.content, 'assistant')"></div>
+              <!-- Source chips for the assistant reply -->
+              <div v-if="m.sources && m.sources.length" class="mt-3 flex flex-wrap items-center gap-2 border-t border-(--border) pt-3">
+                <span class="text-[13px] text-(--muted)">Sources</span>
+                <button
+                  v-for="c in m.sources"
+                  :key="c.n"
+                  class="cursor-pointer rounded-full border border-transparent bg-(--accent-soft) px-3 py-1 text-[13px] text-(--accent) hover:underline"
+                  type="button"
+                  :title="c.title"
+                  @click="openChunk(c)"
+                >[Source {{ c.n }}] {{ c.title }}</button>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
