@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createOpenRouterClient } from '../../lib/generate/openRouterClient.js';
 
-type SdkChunk = { choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }> };
+type SdkChunk = { choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number | null } };
 
 /** A minimal fake `@openrouter/sdk` client that records the request. */
 function fakeSdk(overrides: { stream?: SdkChunk[]; error?: Error } = {}) {
@@ -46,6 +46,29 @@ describe('createOpenRouterClient — streaming', () => {
     });
     const first = await stream[Symbol.asyncIterator]().next();
     expect(first.value.choices?.[0]?.finish_reason).toBe('stop');
+  });
+
+  it('forwards the SDK usage chunk (tokens + cost) to readDelta consumers', async () => {
+    const { send } = fakeSdk({
+      stream: [
+        { choices: [{ delta: { content: 'Hi' }, finish_reason: null }] },
+        {
+          choices: [{ delta: { content: ' there' }, finish_reason: 'stop' }],
+          usage: { promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 },
+        },
+      ],
+    });
+    const client = createOpenRouterClient({ apiKey: 'k', sdk: { chat: { send } } });
+    const stream = await client.chat.send!({
+      model: 'm',
+      messages: [{ role: 'user', content: 'hi' }],
+      stream: true,
+    });
+    let lastUsage: unknown;
+    for await (const chunk of stream) {
+      if (chunk.usage) lastUsage = chunk.usage;
+    }
+    expect(lastUsage).toEqual({ promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 });
   });
 });
 

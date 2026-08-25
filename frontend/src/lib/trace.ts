@@ -45,6 +45,9 @@ export function normalizeTrace(trace: RawTrace | null | undefined): NormalizedTr
     timedOut: !!trace.timedOut,
     error: trace.error || null,
     finalPrompt: Array.isArray(trace.finalPrompt) ? trace.finalPrompt.join('\n\n') : '',
+    ttftMs: trace.ttftMs,
+    tokensPerSecond: trace.tokensPerSecond,
+    usage: trace.usage || null,
   };
 }
 
@@ -57,6 +60,22 @@ export function normalizeTrace(trace: RawTrace | null | undefined): NormalizedTr
 export function formatScore(score: number | null | undefined): string {
   if (typeof score !== 'number' || !Number.isFinite(score)) return '—';
   return `${(score * 100).toFixed(0)}%`;
+}
+
+/**
+ * Formats a per-second token rate as `NN tok/s`, or a placeholder.
+ */
+export function formatTokensPerSecond(tps: number | null | undefined): string {
+  if (typeof tps !== 'number' || !Number.isFinite(tps) || tps <= 0) return '—';
+  return `${Math.round(tps)} tok/s`;
+}
+
+/**
+ * Formats a dollar cost as `$0.0012`, or a placeholder when absent/NaN.
+ */
+export function formatCost(cost: number | null | undefined): string {
+  if (typeof cost !== 'number' || !Number.isFinite(cost)) return '—';
+  return `$${cost.toFixed(cost < 0.01 ? 4 : 3)}`;
 }
 
 /** A single timing bar row for the debug sidebar. */

@@ -12,6 +12,17 @@ export interface ChatStreamChunk {
     delta?: { content?: string | null };
     finish_reason?: string | null;
   }>;
+  /** OpenRouter token usage, present on the final (usage) chunk of a stream. */
+  usage?: TokenUsage | null;
+}
+
+/** OpenRouter token usage stats (from the SDK's `ChatUsage` shape). */
+export interface TokenUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  /** Cost in USD for the request, when reported by OpenRouter. */
+  cost?: number | null;
 }
 
 export interface ChatStream {

@@ -457,4 +457,48 @@ describe('RAG trace event (POC sidebar data)', () => {
     // E2E = pipeline total + generation.
     expect(timings?.e2e).toBe((timings?.total ?? 0) + (timings?.generation ?? 0));
   });
+
+  it('surfaces token usage, TTFT and tokens-per-second in the trace payload', async () => {
+    const pipeline: Pipeline = {
+      run: async () => ({
+        query: 'q',
+        hits: [],
+        retrievalHits: [],
+        sourceMap: {},
+        context: '',
+        sources: [],
+        classification: { rewrite: false, reason: 'self-contained' },
+        rerankInfo: { didRerank: false, reason: 'above threshold' },
+        timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
+        timedOut: false,
+      }),
+      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+    };
+    const sink = makeSink();
+    const sse = createSse(sink);
+    // Stream: content tokens then a final usage chunk (no content choice).
+    const usageStream = streamOf([
+      { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] },
+      { choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }] },
+      { usage: { promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 } },
+    ]);
+    const gen = createGenerator({
+      bridge: staticBridge(usageStream),
+      pipeline,
+      store: { persistMessage: async () => {} },
+    });
+    await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: { trace: true } });
+
+    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+    expect(traceFrames).toHaveLength(1);
+    const data = traceFrames[0]?.data as {
+      usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number | null };
+      ttftMs?: number;
+      tokensPerSecond?: number | null;
+    };
+    expect(data.usage).toEqual({ promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 });
+    expect(typeof data.ttftMs).toBe('number');
+    expect(data.ttftMs ?? -1).toBeGreaterThanOrEqual(0);
+    expect(data.tokensPerSecond).toBeGreaterThan(0);
+  });
 });

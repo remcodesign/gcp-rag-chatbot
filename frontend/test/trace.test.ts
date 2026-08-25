@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeTrace, describeClassification, formatScore, timingBars } from '../src/lib/trace';
+import {
+  normalizeTrace,
+  describeClassification,
+  formatScore,
+  formatTokensPerSecond,
+  formatCost,
+  timingBars,
+} from '../src/lib/trace';
 import type { RawTrace, TraceClassification } from '../src/types/trace';
 
 describe('describeClassification', () => {
@@ -71,6 +78,65 @@ describe('formatScore', () => {
     expect(formatScore(null)).toBe('—');
     expect(formatScore(undefined)).toBe('—');
     expect(formatScore(NaN)).toBe('—');
+  });
+});
+
+describe('formatTokensPerSecond', () => {
+  it('formats a positive rate as tok/s', () => {
+    expect(formatTokensPerSecond(42.3)).toBe('42 tok/s');
+    expect(formatTokensPerSecond(0)).toBe('—');
+  });
+
+  it('returns a placeholder for missing/NaN rates', () => {
+    expect(formatTokensPerSecond(null)).toBe('—');
+    expect(formatTokensPerSecond(undefined)).toBe('—');
+    expect(formatTokensPerSecond(NaN)).toBe('—');
+  });
+});
+
+describe('formatCost', () => {
+  it('formats a small cost with more precision', () => {
+    expect(formatCost(0.00012)).toBe('$0.0001');
+    expect(formatCost(0.12)).toBe('$0.120');
+  });
+
+  it('returns a placeholder for missing/NaN costs', () => {
+    expect(formatCost(null)).toBe('—');
+    expect(formatCost(undefined)).toBe('—');
+    expect(formatCost(NaN)).toBe('—');
+  });
+});
+
+describe('normalizeTrace usage + token-speed passthrough', () => {
+  it('surfaces usage, TTFT and tokens-per-second when present', () => {
+    const trace = normalizeTrace({
+      query: 'q',
+      classification: { rewrite: false, reason: 'self-contained' },
+      retrieved: [],
+      rerank: { didRerank: false, reason: 'above threshold' },
+      context: { sources: [], length: 0 },
+      timings: { embed: 1, retrieval: 2, rerank: 3, total: 6 },
+      ttftMs: 480,
+      tokensPerSecond: 31.2,
+      usage: { promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 },
+    });
+    expect(trace?.ttftMs).toBe(480);
+    expect(trace?.tokensPerSecond).toBe(31.2);
+    expect(trace?.usage).toEqual({ promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 });
+  });
+
+  it('defaults usage fields to safe nulls when absent', () => {
+    const trace = normalizeTrace({
+      query: 'q',
+      classification: { rewrite: false, reason: 'self-contained' },
+      retrieved: [],
+      rerank: { didRerank: false, reason: '' },
+      context: { sources: [], length: 0 },
+      timings: null,
+    });
+    expect(trace?.ttftMs).toBeUndefined();
+    expect(trace?.tokensPerSecond).toBeUndefined();
+    expect(trace?.usage).toBeNull();
   });
 });
 

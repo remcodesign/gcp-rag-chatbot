@@ -15,6 +15,17 @@ export interface TracePayload {
   timedOut: boolean;
   error?: { message: string };
   finalPrompt?: string[];
+  /** Time (ms) to first content token. */
+  ttftMs?: number;
+  /** Completion tokens per second (text emitted / generation time). */
+  tokensPerSecond?: number | null;
+  /** OpenRouter token usage (prompt/completion/total tokens + cost). */
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    cost?: number | null;
+  } | null;
 }
 
 export interface TraceHit {

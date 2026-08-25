@@ -54,11 +54,22 @@ interface BuildTraceInput {
   messages?: ChatMessage[];
   /** LLM generation time (ms), measured by the generator around the stream. */
   generation?: number;
+  /** Token usage from the final OpenRouter stream chunk (when reported). */
+  usage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens?: number;
+    cost?: number | null;
+  } | null;
+  /** Time (ms) to first content token. */
+  ttftMs?: number;
+  /** Completion tokens per second (text emitted / generation time). */
+  tokensPerSecond?: number | null;
 }
 
 export function buildTrace(
   outcome: Partial<RunOutcome> = {},
-  { messages, generation }: BuildTraceInput = {},
+  { messages, generation, usage, ttftMs, tokensPerSecond }: BuildTraceInput = {},
 ): TracePayload {
   const hits = Array.isArray(outcome.retrievalHits) ? outcome.retrievalHits : [];
   const sourceMap = outcome.sourceMap || {};
@@ -98,6 +109,9 @@ export function buildTrace(
     context,
     timings,
     timedOut: !!(outcome.timedOut || outcome.error),
+    ...(ttftMs !== undefined ? { ttftMs } : {}),
+    ...(tokensPerSecond != null ? { tokensPerSecond } : {}),
+    ...(usage ? { usage } : {}),
   };
 
   if (outcome.error) {

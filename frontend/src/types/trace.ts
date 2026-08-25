@@ -56,6 +56,14 @@ export interface TraceError {
   message: string;
 }
 
+/** OpenRouter token usage surfaced in the trace (prompt/completion/total + cost). */
+export interface TraceUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  cost?: number | null;
+}
+
 /** The raw (partial-tolerant) trace payload emitted by the backend. */
 export interface RawTrace {
   query?: string;
@@ -67,6 +75,12 @@ export interface RawTrace {
   timedOut?: boolean;
   error?: TraceError | null;
   finalPrompt?: string[];
+  /** Time (ms) to first content token. */
+  ttftMs?: number;
+  /** Completion tokens per second (text emitted / generation time). */
+  tokensPerSecond?: number | null;
+  /** OpenRouter token usage (prompt/completion/total tokens + cost). */
+  usage?: TraceUsage | null;
 }
 
 /** The normalized trace expected by the sidebar. */
@@ -80,4 +94,10 @@ export interface NormalizedTrace {
   timedOut: boolean;
   error: TraceError | null;
   finalPrompt: string;
+  /** Time (ms) to first content token. */
+  ttftMs?: number;
+  /** Completion tokens per second (text emitted / generation time). */
+  tokensPerSecond?: number | null;
+  /** OpenRouter token usage (prompt/completion/total tokens + cost). */
+  usage?: TraceUsage | null;
 }

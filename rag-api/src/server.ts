@@ -71,7 +71,7 @@ function createRuntime(): {
   const state = createStateStore(firestore);
   const pipeline = createPipeline(
     { firestore, embeddings },
-    { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000, minScore: MIN_SCORE, maxSources: 5 },
+    { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000, minScore: MIN_SCORE, maxSources: 10 },
   );
   const bridge = createChatBridge(
     createOpenRouterClient({ apiKey: OPENROUTER_API_KEY, provider: providerConfig }),

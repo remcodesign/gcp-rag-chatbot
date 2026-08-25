@@ -34,13 +34,22 @@ export interface OpenRouterClientOptions {
 /**
  * Bridges the SDK's streaming chunk (camelCase `finishReason`) into the app's
  * `ChatStreamChunk` shape (`finish_reason`), exposing only the fields the
- * generator's `readDelta` consumes.
+ * generator's `readDelta` consumes, plus the final `usage` chunk (tokens/cost).
  */
 async function *adaptSdkStream(
-  sdkStream: AsyncIterable<{ choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }> }>,
+  sdkStream: AsyncIterable<{
+    choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>;
+    usage?: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      cost?: number | null;
+    } | null;
+  }>,
 ): AsyncGenerator<ChatStreamChunk> {
   for await (const chunk of sdkStream) {
     const choice = chunk.choices?.[0];
+    const usage = chunk.usage;
     yield {
       choices: [
         {
@@ -48,6 +57,18 @@ async function *adaptSdkStream(
           finish_reason: choice?.finish_reason ?? null,
         },
       ],
+      // OpenRouter returns a token-usage "info chunk" (no content choice)
+      // alongside the final content chunk; the SDK parses it to camelCase.
+      ...(usage
+        ? {
+            usage: {
+              promptTokens: usage.promptTokens,
+              completionTokens: usage.completionTokens,
+              totalTokens: usage.totalTokens,
+              cost: usage.cost ?? null,
+            },
+          }
+        : {}),
     };
   }
 }

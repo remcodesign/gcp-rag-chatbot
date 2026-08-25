@@ -81,6 +81,21 @@ export interface GenerateOnceResult {
   citations: Citation[];
   requestId: string;
   model: string | null;
+  /** Token usage from the final OpenRouter stream chunk (when reported). */
+  usage?: GenerateUsage | null;
+  /** Time (ms) to first content token. */
+  ttftMs?: number;
+  /** Completion tokens per second (text emitted / generation time). */
+  tokensPerSecond?: number | null;
+  /** Generation wall-clock time (ms) for this call. */
+  generationMs?: number;
+}
+
+export interface GenerateUsage {
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  cost?: number | null;
 }
 
 export interface StreamAnswerInput {
@@ -139,8 +154,26 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
     const partial: string[] = [];
     const seen = new Set<number>();
     let citations: Citation[] = [];
+    const genStart = Date.now();
+    let ttftMs: number | undefined;
+    let usage: GenerateUsage | undefined;
 
     for await (const chunk of stream) {
+      // First (non-empty) content token marks the generation start -> TTFT.
+      if (ttftMs === undefined && chunk?.usage === undefined) {
+        const probe: string = reader.step(chunk as ChatStreamChunk, { delta: 'choices.0.delta.content' });
+        if (probe.length > 0) ttftMs = Date.now() - genStart;
+      }
+      // Capture token usage from the final usage chunk (no content choice).
+      if (chunk?.usage) {
+        usage = {
+          promptTokens: chunk.usage.promptTokens,
+          completionTokens: chunk.usage.completionTokens,
+          totalTokens: chunk.usage.totalTokens,
+          cost: chunk.usage.cost ?? null,
+        };
+      }
+
       const token: string = reader.step(chunk as ChatStreamChunk, { delta: 'choices.0.delta.content' });
       if (!token) continue;
 
@@ -158,11 +191,22 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
       partial.push(token);
     }
 
+    const generationMs = Math.max(Date.now() - genStart, 1);
+    const completionTokens = usage?.completionTokens;
+    const tokensPerSecond =
+      typeof completionTokens === 'number' && completionTokens > 0 && generationMs > 0
+        ? completionTokens / (generationMs / 1000)
+        : null;
+
     return {
       text: partial.join(''),
       citations,
       requestId: opened.requestId,
       model: opened.model ?? null,
+      usage,
+      ttftMs,
+      tokensPerSecond,
+      generationMs,
     };
   }
 
@@ -215,6 +259,9 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
     let attempt = 0;
     const genT0 = Date.now();
     let generationMs = 0;
+    let usage: GenerateUsage | undefined;
+    let ttftMs: number | undefined;
+    let tokensPerSecond: number | null = null;
 
     try {
       for (;;) {
@@ -233,6 +280,11 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
           partialText = res.text;
           citations = res.citations;
           request = { model: res.model };
+          // Keep the last generation's usage + timing; regeneration calls add
+          // their own, so prefer the most recent complete call.
+          if (res.usage) usage = res.usage;
+          if (res.ttftMs !== undefined) ttftMs = res.ttftMs;
+          if (res.tokensPerSecond !== undefined) tokensPerSecond = res.tokensPerSecond;
           break;
         } catch (err) {
           const e = normErr(err);
@@ -249,7 +301,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
       logger.error(`generation interrupted for ${sessionId}: ${e.message}`);
       if (options.trace) {
         try {
-          sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs }));
+          sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs, usage, ttftMs, tokensPerSecond }));
         } catch (traceErr) {
           const te = traceErr as { message?: string };
           logger.warn(`trace serialization failed for ${sessionId}: ${te.message}`);
@@ -261,7 +313,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
 
     if (options.trace) {
       try {
-        sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs }));
+        sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs, usage, ttftMs, tokensPerSecond }));
       } catch (err) {
         const e = err as { message?: string };
         logger.warn(`trace serialization failed for ${sessionId}: ${e.message}`);

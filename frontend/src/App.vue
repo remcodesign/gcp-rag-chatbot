@@ -5,7 +5,7 @@ import { STAGE_LABELS } from './lib/chatStore';
 import { openSseStream } from './lib/sseTransport';
 import { renderAnswer, buildSourceChips } from './lib/citations';
 import { resolveApiBase, resolveTraceEnabled } from './lib/config';
-import { normalizeTrace, formatScore, timingBars } from './lib/trace';
+import { normalizeTrace, formatScore, formatTokensPerSecond, formatCost, timingBars } from './lib/trace';
 import { SAMPLE_GROUPS } from './lib/sampleQuestions';
 import type { Source } from './types/sse';
 import type { TraceHit } from './types/trace';
@@ -43,6 +43,17 @@ const isStreaming = computed(() => status.value === STATUS.STREAMING);
 const isError = computed(() => status.value === STATUS.ERROR);
 const isGenerating = computed(() => store.state.stage === 'generating');
 const timingRows = computed(() => timingBars(trace.value?.timings ?? null));
+
+/** Whether any token-usage / token-speed data is available to render. */
+const hasUsage = computed(() => {
+  const t = trace.value;
+  if (!t) return false;
+  return (
+    t.usage != null ||
+    t.ttftMs != null ||
+    t.tokensPerSecond != null
+  );
+});
 
 // Extracts a human-readable string from the backend's normalized error detail
 // (shape: { message?, statusCode?, retryable? }). Returns '' when there is none.
@@ -304,6 +315,36 @@ function newSession(): void {
                     ></span>
                   </span>
                   <span class="w-14 shrink-0 text-right font-semibold text-(--text)">{{ row.ms }}ms</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-if="hasUsage" class="mb-6">
+              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Token usage</h3>
+              <div class="mt-2 flex flex-col gap-1.5">
+                <div v-if="trace.usage?.promptTokens != null" class="flex items-center gap-2 text-[11px]">
+                  <span class="w-14 shrink-0 text-(--muted)">Prompt</span>
+                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.usage.promptTokens }} tok</span>
+                </div>
+                <div v-if="trace.usage?.completionTokens != null" class="flex items-center gap-2 text-[11px]">
+                  <span class="w-14 shrink-0 text-(--muted)">Output</span>
+                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.usage.completionTokens }} tok</span>
+                </div>
+                <div v-if="trace.usage?.totalTokens != null" class="flex items-center gap-2 text-[11px]">
+                  <span class="w-14 shrink-0 text-(--muted)">Total</span>
+                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.usage.totalTokens }} tok</span>
+                </div>
+                <div v-if="trace.ttftMs != null" class="flex items-center gap-2 text-[11px]">
+                  <span class="w-14 shrink-0 text-(--muted)">TTFT</span>
+                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.ttftMs }}ms</span>
+                </div>
+                <div class="flex items-center gap-2 text-[11px]">
+                  <span class="w-14 shrink-0 text-(--muted)">Speed</span>
+                  <span class="text-[11px] font-semibold text-(--text)">{{ formatTokensPerSecond(trace.tokensPerSecond) }}</span>
+                </div>
+                <div v-if="trace.usage?.cost != null" class="flex items-center gap-2 text-[11px]">
+                  <span class="w-14 shrink-0 text-(--muted)">Cost</span>
+                  <span class="text-[11px] font-semibold text-(--text)">{{ formatCost(trace.usage.cost) }}</span>
                 </div>
               </div>
             </div>

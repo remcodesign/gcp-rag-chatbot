@@ -36,7 +36,7 @@ interface BuildContextOptions {
  */
 export function buildContext(
   hits: Hit[],
-  { minScore = 0.3, maxSources = 5 }: BuildContextOptions = {},
+  { minScore = 0.3, maxSources = 10 }: BuildContextOptions = {},
 ): BuildContextResult {
   const kept = (Array.isArray(hits) ? hits : [])
     .filter((h) => isRelevant(h, { minScore }))
