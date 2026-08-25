@@ -37,3 +37,9 @@ variable "thinking_mode_on" {
   type        = bool
   default     = false
 }
+
+variable "min_score" {
+  description = "Minimum retrieval relevance score (0..1) for a chunk to be kept in the LLM context. Higher = fewer, more relevant sources."
+  type        = number
+  default     = 0.35
+}

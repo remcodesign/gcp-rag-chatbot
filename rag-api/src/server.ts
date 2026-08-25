@@ -18,26 +18,38 @@ import { createStateStore } from '../lib/state/sessionStore.js';
 import { createGenerator } from '../lib/generate/generator.js';
 import { createSse } from '../lib/generate/sse.js';
 import { createChatBridge } from '../lib/generate/chatBridge.js';
+import { createOpenRouterClient } from '../lib/generate/openRouterClient.js';
 import { createOpenRouterEmbedder } from '../lib/rag/openRouterEmbedder.js';
 import { createHealth } from '../lib/health.js';
 import { corsHeaders, handlePreflight } from '../lib/cors.js';
 import type { Firestore as FirestoreShaped } from '../lib/types/firestore.js';
-import type { ChatProvider, ChatStream, ChatStreamChunk, ChatParams } from '../lib/types/chat.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-oss-20b';
-// THINKING_MODE_ON mirrors the Terraform `thinking_mode_on` variable. Default
-// off: send NO `reasoning` override, so the model keeps its native behavior
-// (gpt-oss is natively non-thinking and its concrete slug would REJECT an
-// unsupported `reasoning` param with a 400 — the root cause of the
-// "generation interrupted" error). Only when thinking is ON for a
-// reasoning-capable model do we send an override.
-const REASONING_CAPABLE_MODEL = !/gpt-oss/i.test(CHAT_MODEL);
-const THINKING_MODE_ON = (process.env.THINKING_MODE_ON ?? '') === 'true';
-const reasoning = THINKING_MODE_ON && REASONING_CAPABLE_MODEL ? { effort: 'high' } : undefined;
 
-type ErrorWithStatus = Error & { statusCode?: number; retryable?: boolean };
+// Enables model reasoning. Default off = the model's NATIVE behavior (for
+// gpt-oss that is non-thinking, and its concrete slug REJECTS an unsupported
+// `reasoning` param with a 400 — the earlier "generation interrupted" cause).
+// We only send a `reasoning` override when thinking is explicitly ON *and* the
+// model supports it. The value uses `enabled: true` (the modern OpenRouter
+// shape) instead of the old `effort`-only form.
+const THINKING_MODE_ON = (process.env.THINKING_MODE_ON ?? '') === 'true';
+const REASONING_CAPABLE_MODEL = !/gpt-oss/i.test(CHAT_MODEL);
+const reasoning: Record<string, unknown> | undefined =
+  REASONING_CAPABLE_MODEL && THINKING_MODE_ON ? { enabled: true, effort: 'low' } : undefined;
+
+  // Minimum retrieval relevance (0..1) for a chunk to be kept in the LLM context.
+const MIN_SCORE = Number(process.env.MIN_SCORE ?? 0.35);
+
+// 1. Core performance configuration (Throughput + Fallbacks). Tells OpenRouter
+// to prefer the fastest provider for the requested model, require a minimum
+// throughput, and fall back automatically if the chosen route underperforms.
+const providerConfig: Record<string, unknown> = {
+  sort: 'throughput',
+  preferred_min_throughput: 60,
+  allow_fallbacks: true,
+};
 
 interface SseRequestBody {
   query?: unknown;
@@ -59,9 +71,12 @@ function createRuntime(): {
   const state = createStateStore(firestore);
   const pipeline = createPipeline(
     { firestore, embeddings },
-    { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000, minScore: 0.35, maxSources: 5 },
+    { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000, minScore: MIN_SCORE, maxSources: 5 },
   );
-  const bridge = createChatBridge(createOpenRouterClient(), { model: CHAT_MODEL });
+  const bridge = createChatBridge(
+    createOpenRouterClient({ apiKey: OPENROUTER_API_KEY, provider: providerConfig }),
+    { model: CHAT_MODEL },
+  );
   const generator = createGenerator(
     { bridge, pipeline, store: state },
     { reasoning },
@@ -138,82 +153,6 @@ function createRuntime(): {
   });
 
   return { server, state, pipeline, generator };
-}
-
-/**
- * Builds a chat bridge client from the OpenRouter REST API using Node fetch with
- * streaming. Mirrors the shape `createChatBridge` expects: `chat.send(params)`
- * returns an async iterable of openai-style chunks.
- */
-function createOpenRouterClient(): { chat: ChatProvider } {
-  const base = 'https://openrouter.ai/api/v1';
-  return {
-    chat: {
-      async send(params: ChatParams): Promise<ChatStream> {
-        const controller = new AbortController();
-        const res = await fetch(`${base}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: params.model,
-            messages: params.messages,
-            stream: true,
-            ...(params.reasoning ? { reasoning: params.reasoning } : {}),
-          }),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          const status = res.status;
-          const err: ErrorWithStatus = new Error(`OpenRouter chat HTTP ${status}`);
-          err.statusCode = status;
-          err.retryable = status === 429 || status >= 500;
-          throw err;
-        }
-        return readSseStream(res.body, controller);
-      },
-    },
-  };
-}
-
-/**
- * Reads an SSE body from the OpenRouter streaming response and yields openai-
- * style chunks `{ choices:[{ delta:{content}, finish_reason }] }`.
- */
-async function *readSseStream(
-  body: ReadableStream<Uint8Array> | null,
-  controller: AbortController,
-): AsyncGenerator<ChatStreamChunk> {
-  try {
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const reader = body?.getReader();
-    if (reader) {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx = -1;
-        while ((idx = buffer.indexOf('\n\n')) !== -1) {
-          const block = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          const line = block.split('\n').find((l) => l.startsWith('data:'));
-          if (!line) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') return;
-          try {
-            yield JSON.parse(data) as ChatStreamChunk;
-          } catch {
-            // skip malformed
-          }
-        }
-      }
-    }
-  } finally {
-    controller.abort();
-  }
 }
 
 export interface StartOptions {

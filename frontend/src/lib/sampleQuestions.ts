@@ -22,6 +22,7 @@ export interface SampleGroup {
 }
 
 const PRODUCTS: SampleQuestion[] = [
+  { text: 'Geef me outdoor slaapzak comfort advies?' },
   { text: 'Wat is de comforttemperatuur van de Nachtenbloem slaapzak?' },
   { text: 'Hoe zet ik de trekking tent het snelst op?' },
   { text: 'Is de wandelrugzak waterdicht en klikt het op het frame?' },

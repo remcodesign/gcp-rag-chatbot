@@ -25,6 +25,8 @@ export interface ChatParams {
   signal?: AbortSignal;
   /** OpenRouter `reasoning` override (e.g. `{ effort: 'none' }` to disable thinking). */
   reasoning?: Record<string, unknown>;
+  /** OpenRouter `provider` routing config (e.g. throughput sorting + fallbacks). */
+  provider?: Record<string, unknown>;
 }
 
 export interface ChatProvider {

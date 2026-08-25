@@ -44,11 +44,17 @@ resource "google_cloud_run_service" "api" {
         }
 
         # Thinking mode toggle (variable-controlled, git-committed). Maps 1:1 to
-        # the rag-api env var of the same name; when false, rag-api disables LLM
-        # reasoning (effort: "none") for faster, cheaper generation.
+        # the rag-api env var of the same name; when false, rag-api sends no
+        # `reasoning` override (model stays native, e.g. non-thinking gpt-oss).
         env {
           name  = "THINKING_MODE_ON"
           value = var.thinking_mode_on ? "true" : "false"
+        }
+
+        # Minimum retrieval relevance (0..1) for sources kept in context.
+        env {
+          name  = "MIN_SCORE"
+          value = tostring(var.min_score)
         }
       }
 
