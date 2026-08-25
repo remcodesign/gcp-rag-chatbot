@@ -3,18 +3,16 @@
  * (Anthropic, Gemini, local OSS, …) can be added later behind the same
  * `ChatProvider` shape.
  *
- * Uses Node's built-in `fetch` + streaming (no SDK dependency) for a zero-deps,
- * Cloud Run-friendly footprint. The unified OpenRouter `reasoning` parameter is
- * forwarded when present; when omitted the model keeps its native behavior.
- *
- * The factory returns the shape `createChatBridge` expects:
+ * Domain 99: replaced the hand-rolled `fetch` + SSE stream with the official
+ * `@openrouter/sdk`. The SDK's `chat.send({ chatRequest })` handles auth, the
+ * `provider` routing config, typed errors, and streaming for us. The factory
+ * still returns the shape `createChatBridge` expects:
  * `{ chat: { send(params) -> AsyncIterable<ChatStreamChunk> } }`.
  */
 
-import type { ChatParams, ChatProvider, ChatStream, ChatStreamChunk } from '../types/chat.js';
+import { OpenRouter } from '@openrouter/sdk';
 
-/** Error with the OpenRouter HTTP status + retryable classification. */
-type ProviderError = Error & { statusCode?: number; retryable?: boolean };
+import type { ChatParams, ChatProvider, ChatStream, ChatStreamChunk } from '../types/chat.js';
 
 export interface OpenRouterClientOptions {
   apiKey: string;
@@ -25,10 +23,37 @@ export interface OpenRouterClientOptions {
    * with automatic fallback.
    */
   provider?: Record<string, unknown>;
+  /**
+   * Inject a pre-built SDK client (for tests). Defaults to a real `OpenRouter`
+   * instance. The injected value only needs the surface we call:
+   * `chat.send({ chatRequest }) -> async-iterable`.
+   */
+  sdk?: { chat: { send(params: unknown): Promise<unknown> } };
 }
 
 /**
- * Builds an OpenRouter chat client backed by Node fetch + streaming.
+ * Bridges the SDK's streaming chunk (camelCase `finishReason`) into the app's
+ * `ChatStreamChunk` shape (`finish_reason`), exposing only the fields the
+ * generator's `readDelta` consumes.
+ */
+async function *adaptSdkStream(
+  sdkStream: AsyncIterable<{ choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }> }>,
+): AsyncGenerator<ChatStreamChunk> {
+  for await (const chunk of sdkStream) {
+    const choice = chunk.choices?.[0];
+    yield {
+      choices: [
+        {
+          delta: { content: choice?.delta?.content ?? '' },
+          finish_reason: choice?.finish_reason ?? null,
+        },
+      ],
+    };
+  }
+}
+
+/**
+ * Builds an OpenRouter chat client backed by the official SDK.
  *
  * @param options API key + optional base URL + default provider routing config.
  * @returns a `{ chat }` provider adapter.
@@ -37,74 +62,35 @@ export function createOpenRouterClient({
   apiKey,
   base,
   provider,
+  sdk,
 }: OpenRouterClientOptions): { chat: ChatProvider } {
-  const baseUrl = base ?? 'https://openrouter.ai/api/v1';
+  const client =
+    sdk ??
+    new OpenRouter({
+      apiKey,
+      ...(base ? { serverURL: base } : {}),
+    });
+
   return {
     chat: {
       async send(params: ChatParams): Promise<ChatStream> {
-        const controller = new AbortController();
-        const res = await fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: params.model,
+        const request = {
+          chatRequest: {
+            model: params.model ?? undefined,
             messages: params.messages,
             stream: true,
             ...(params.reasoning ? { reasoning: params.reasoning } : {}),
             ...(params.provider ?? provider ? { provider: params.provider ?? provider } : {}),
-          }),
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          const status = res.status;
-          const err: ProviderError = new Error(`OpenRouter chat HTTP ${status}`);
-          err.statusCode = status;
-          err.retryable = status === 429 || status >= 500;
-          throw err;
-        }
-        return readSseStream(res.body, controller);
+          },
+          ...(params.signal ? { signal: params.signal } : {}),
+        };
+        const sdkStream = (await client.chat.send(
+          request as never,
+        )) as AsyncIterable<{
+          choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>;
+        }>;
+        return adaptSdkStream(sdkStream);
       },
     },
   };
-}
-
-/**
- * Reads an SSE body from the OpenRouter streaming response and yields openai-
- * style chunks `{ choices:[{ delta:{content}, finish_reason }] }`.
- */
-export async function *readSseStream(
-  body: ReadableStream<Uint8Array> | null,
-  controller: AbortController,
-): AsyncGenerator<ChatStreamChunk> {
-  try {
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const reader = body?.getReader();
-    if (reader) {
-      for (;;) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx = -1;
-        while ((idx = buffer.indexOf('\n\n')) !== -1) {
-          const block = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          const line = block.split('\n').find((l) => l.startsWith('data:'));
-          if (!line) continue;
-          const data = line.slice(5).trim();
-          if (data === '[DONE]') return;
-          try {
-            yield JSON.parse(data) as ChatStreamChunk;
-          } catch {
-            // skip malformed
-          }
-        }
-      }
-    }
-  } finally {
-    controller.abort();
-  }
 }

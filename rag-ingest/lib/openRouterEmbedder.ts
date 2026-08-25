@@ -1,11 +1,14 @@
 /**
- * OpenRouter HTTP embedder adapter — production wiring for the seed Job.
+ * OpenRouter embedder adapter — production wiring for the seed Job.
  *
  * Domain 4 / Domain 5 seam. The seed Job needs to compute
  * `openai/text-embedding-3-small` vectors from OpenRouter. This is the production
- * adapter that replaces the test/injected stubs. It uses Node's built-in `fetch`
- * (Node >= 20), so **no new runtime dependency** is added.
+ * adapter that replaces the test/injected stubs. It is backed by the official
+ * `@openrouter/sdk` (Domain 99) for better maintainability, future-proofing, and
+ * structured error handling.
  */
+
+import { OpenRouter } from '@openrouter/sdk';
 
 import type { Embedder } from './types/embedder.js';
 
@@ -18,12 +21,28 @@ export interface OpenRouterEmbedderOptions {
   model?: string;
   baseUrl?: string;
   timeoutMs?: number;
+  /**
+   * Inject a pre-built SDK client (for tests). Defaults to a real `OpenRouter`
+   * instance. Only the `embeddings.generate` surface is called.
+   */
+  sdk?: { embeddings: { generate(request: unknown): Promise<unknown> } };
 }
 
 type EmbeddingError = Error & { statusCode?: number; retryable?: boolean };
 
-interface EmbeddingsPayload {
-  data?: Array<{ embedding?: number[] }>;
+/** Extracts a normalized `{statusCode, retryable}` from any thrown error. */
+function toEmbeddingError(err: unknown): EmbeddingError {
+  const candidate = err as { statusCode?: unknown; message?: unknown };
+  const status = Number(candidate?.statusCode);
+  if (Number.isFinite(status) && status > 0) {
+    const normalized = new Error(
+      String(candidate?.message ?? `OpenRouter embeddings error ${status}`),
+    ) as EmbeddingError;
+    normalized.statusCode = status;
+    normalized.retryable = status === 429 || status >= 500;
+    return normalized;
+  }
+  return err instanceof Error ? err : new Error(String(err));
 }
 
 /**
@@ -36,47 +55,36 @@ export function createOpenRouterEmbedder({
   model = EMBED_MODEL,
   baseUrl = 'https://openrouter.ai/api/v1',
   timeoutMs = 30_000,
+  sdk,
 }: OpenRouterEmbedderOptions): Embedder {
   if (!apiKey) throw new Error('OpenRouterEmbedder: apiKey is required');
+
+  const client =
+    sdk ??
+    new OpenRouter({
+      apiKey,
+      ...(baseUrl ? { serverURL: baseUrl } : {}),
+      timeoutMs,
+    });
 
   /** POST /embeddings with an array input (batched call per spec). */
   async function request(
     texts: string[],
     req: { model?: string; dimensions?: number } = {},
   ): Promise<number[][]> {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(`${baseUrl}/embeddings`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      const response = (await client.embeddings.generate({
+        requestBody: {
+          model: req.model ?? model,
+          input: texts,
+          dimensions: req.dimensions ?? EMBED_DIMS,
         },
-        body: JSON.stringify({ model: req.model ?? model, input: texts, dimensions: req.dimensions ?? EMBED_DIMS }),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const status = res.status;
-        let body: string;
-        try {
-          body = await res.text();
-        } catch {
-          body = '';
-        }
-        // Enrich the Error with the OpenRouter status for retry/backoff logic
-        // (the same `.statusCode`/`.retryable` shape the chat bridge uses).
-        const err = new Error(`OpenRouter embeddings HTTP ${status}: ${body.slice(0, 200)}`) as EmbeddingError;
-        err.statusCode = status;
-        err.retryable = status === 429 || status >= 500;
-        throw err;
-      }
-      // OpenRouter returns `{ data: [{ embedding: number[] }, ...] }`.
-      const payload = (await res.json()) as EmbeddingsPayload;
-      const data = payload.data;
-      return Array.isArray(data) ? data.map((d) => d.embedding ?? []) : [];
-    } finally {
-      clearTimeout(t);
+      })) as { data?: Array<{ embedding?: number[] | string }> };
+      const data = response?.data;
+      if (!Array.isArray(data)) return [];
+      return data.map((d) => (Array.isArray(d.embedding) ? d.embedding : []));
+    } catch (err) {
+      throw toEmbeddingError(err);
     }
   }
 

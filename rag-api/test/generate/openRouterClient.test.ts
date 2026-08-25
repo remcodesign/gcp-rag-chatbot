@@ -1,101 +1,101 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { readSseStream, createOpenRouterClient } from '../../lib/generate/openRouterClient.js';
+import { describe, it, expect, vi } from 'vitest';
+import { createOpenRouterClient } from '../../lib/generate/openRouterClient.js';
 
-/** Builds a fake browser-style ReadableStream from an array of string chunks. */
-function readableFrom(chunks: string[]): ReadableStream<Uint8Array> {
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
-      for (const c of chunks) controller.enqueue(encoder.encode(c));
-      controller.close();
-    },
+type SdkChunk = { choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }> };
+
+/** A minimal fake `@openrouter/sdk` client that records the request. */
+function fakeSdk(overrides: { stream?: SdkChunk[]; error?: Error } = {}) {
+  const send = vi.fn(async (request: unknown) => {
+    if (overrides.error) throw overrides.error;
+    const chunks = overrides.stream ?? [];
+    return { [Symbol.asyncIterator]: async function * () { for (const c of chunks) yield c; } };
   });
-  return stream;
+  return { chat: { send }, send };
 }
 
-describe('readSseStream', () => {
-  it('yields openai-style chunks from an SSE body', async () => {
-    const controller = new AbortController();
-    const body = readableFrom([
-      'data: {"choices":[{"delta":{"content":"Hello"},"finish_reason":null}]}\n\n',
-      'data: {"choices":[{"delta":{"content":" world"},"finish_reason":"stop"}]}\n\n',
-      'data: [DONE]\n\n',
-    ]);
-    const out: Array<{ choices: unknown }> = [];
-    for await (const chunk of readSseStream(body, controller)) {
-      out.push(chunk as { choices: unknown });
+describe('createOpenRouterClient — streaming', () => {
+  it('yields openai-style chunks via the SDK stream', async () => {
+    const { send } = fakeSdk({
+      stream: [
+        { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] },
+        { choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }] },
+      ],
+    });
+    const client = createOpenRouterClient({ apiKey: 'k', sdk: { chat: { send } } });
+    const out: string[] = [];
+    const stream = await client.chat.send!({
+      model: 'm',
+      messages: [{ role: 'user', content: 'hi' }],
+      stream: true,
+    });
+    for await (const chunk of stream) {
+      out.push(chunk.choices?.[0]?.delta?.content ?? '');
     }
-    const contents = out.map(
-      (c) => ((c as { choices: Array<{ delta: { content: string } }> }).choices[0]?.delta?.content ?? ''),
-    );
-    expect(contents).toEqual(['Hello', ' world']);
+    expect(out).toEqual(['Hello', ' world']);
   });
 
-  it('stops at [DONE] and aborts the controller', async () => {
-    const controller = new AbortController();
-    const abortSpy = vi.spyOn(controller, 'abort');
-    const body = readableFrom(['data: [DONE]\n\n']);
-    const out = [];
-    for await (const chunk of readSseStream(body, controller)) {
-      out.push(chunk);
-    }
-    expect(out).toHaveLength(0);
-    expect(abortSpy).toHaveBeenCalled();
-  });
-
-  it('tolerates a null body and does not throw', async () => {
-    const controller = new AbortController();
-    const out = [];
-    for await (const chunk of readSseStream(null, controller)) {
-      out.push(chunk);
-    }
-    expect(out).toHaveLength(0);
+  it('exposes a stable requestId-agnostic shape to readDelta (finish_reason preserved)', async () => {
+    const { send } = fakeSdk({
+      stream: [{ choices: [{ delta: { content: 'bye' }, finish_reason: 'stop' }] }],
+    });
+    const client = createOpenRouterClient({ apiKey: 'k', sdk: { chat: { send } } });
+    const stream = await client.chat.send!({
+      model: 'm',
+      messages: [{ role: 'user', content: 'hi' }],
+      stream: true,
+    });
+    const first = await stream[Symbol.asyncIterator]().next();
+    expect(first.value.choices?.[0]?.finish_reason).toBe('stop');
   });
 });
 
 describe('createOpenRouterClient — provider config', () => {
-  it('sends the default provider (throughput + fallbacks) config in the body', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(readableFrom(['data: [DONE]\n\n']), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
+  it('forwards the default provider (throughput + fallbacks) config to the SDK', async () => {
+    const { send } = fakeSdk({ stream: [] });
     const client = createOpenRouterClient({
       apiKey: 'k',
       provider: { sort: 'throughput', preferred_min_throughput: 60, allow_fallbacks: true },
+      sdk: { chat: { send } },
     });
     await client.chat.send!({
       model: 'm',
       messages: [{ role: 'user', content: 'hi' }],
       stream: true,
     });
-
-    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
-    const body = JSON.parse(init.body) as { provider?: unknown };
-    expect(body.provider).toEqual({ sort: 'throughput', preferred_min_throughput: 60, allow_fallbacks: true });
+    const request = send.mock.calls[0]?.[0] as { chatRequest: { provider?: unknown } };
+    expect(request.chatRequest.provider).toEqual({
+      sort: 'throughput',
+      preferred_min_throughput: 60,
+      allow_fallbacks: true,
+    });
   });
 
   it('a per-request provider overrides the default', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(readableFrom(['data: [DONE]\n\n']), { status: 200 }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const client = createOpenRouterClient({ apiKey: 'k', provider: { sort: 'price' } });
+    const { send } = fakeSdk({ stream: [] });
+    const client = createOpenRouterClient({
+      apiKey: 'k',
+      provider: { sort: 'price' },
+      sdk: { chat: { send } },
+    });
     await client.chat.send!({
       model: 'm',
       messages: [{ role: 'user', content: 'hi' }],
       stream: true,
       provider: { sort: 'latency' },
     });
-
-    const [, init] = fetchMock.mock.calls[0] as [string, { body: string }];
-    const body = JSON.parse(init.body) as { provider?: unknown };
-    expect(body.provider).toEqual({ sort: 'latency' });
+    const request = send.mock.calls[0]?.[0] as { chatRequest: { provider?: unknown } };
+    expect(request.chatRequest.provider).toEqual({ sort: 'latency' });
   });
+});
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    vi.unstubAllGlobals();
+describe('createOpenRouterClient — error handling', () => {
+  it('normalizes a 429 (too many requests) error for retry/backoff', async () => {
+    const statusErr = new Error('rate limited') as Error & { statusCode: number };
+    statusErr.statusCode = 429;
+    const { send } = fakeSdk({ error: statusErr });
+    const client = createOpenRouterClient({ apiKey: 'k', sdk: { chat: { send } } });
+    await expect(
+      client.chat.send!({ model: 'm', messages: [{ role: 'user', content: 'hi' }], stream: true }),
+    ).rejects.toMatchObject({ statusCode: 429 });
   });
 });

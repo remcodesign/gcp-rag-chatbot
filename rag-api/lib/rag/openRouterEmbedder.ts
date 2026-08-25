@@ -1,10 +1,17 @@
 /**
- * OpenRouter HTTP embedder adapter — production provider wiring.
+ * OpenRouter embedder adapter — production provider wiring backed by the
+ * official `@openrouter/sdk`.
  *
  * Contract it satisfies (used by `retriever.ts` / the ingest `seeder`):
  *     embed(text: string)                       -> number[]
  *     embedBatch?(texts: string[], opts?)       -> number[][]
+ *
+ * Domain 99: replaced the hand-rolled `fetch` POST with `openRouter.embeddings.
+ * generate(...)` for better maintainability, future-proofing, and structured
+ * error handling. The `Embedder` contract is unchanged.
  */
+
+import { OpenRouter } from '@openrouter/sdk';
 
 import type { Embedder } from '../types/rag.js';
 
@@ -16,6 +23,11 @@ interface EmbedderOptions {
   model?: string;
   baseUrl?: string;
   timeoutMs?: number;
+  /**
+   * Inject a pre-built SDK client (for tests). Defaults to a real `OpenRouter`
+   * instance. Only the `embeddings.generate` surface is called.
+   */
+  sdk?: { embeddings: { generate(request: unknown): Promise<unknown> } };
 }
 
 export interface OpenRouterEmbedder extends Embedder {
@@ -28,56 +40,59 @@ interface EmbedRequestOptions {
   dimensions?: number;
 }
 
-interface EmbedResponsePayload {
-  data?: Array<{ embedding?: number[] }>;
-}
-
 type ErrorWithStatus = Error & { statusCode?: number; retryable?: boolean };
+
+/** Extracts a normalized `{statusCode, retryable}` from any thrown error. */
+function toErrorWithStatus(err: unknown): ErrorWithStatus {
+  const candidate = err as { statusCode?: unknown; message?: unknown };
+  const status = Number(candidate?.statusCode);
+  if (Number.isFinite(status) && status > 0) {
+    const normalized: ErrorWithStatus = new Error(
+      String(candidate?.message ?? `OpenRouter embeddings error ${status}`),
+    );
+    normalized.statusCode = status;
+    normalized.retryable = status === 429 || status >= 500;
+    return normalized;
+  }
+  return err instanceof Error ? err : new Error(String(err));
+}
 
 export function createOpenRouterEmbedder({
   apiKey,
   model = EMBED_MODEL,
   baseUrl = 'https://openrouter.ai/api/v1',
   timeoutMs = 30_000,
+  sdk,
 }: EmbedderOptions): OpenRouterEmbedder {
   if (!apiKey) throw new Error('OpenRouterEmbedder: apiKey is required');
+
+  // One SDK client per embedder; `serverURL` aligns the base and `timeoutMs`
+  // bounds every request (SDK RequestOptions also honor per-call overrides).
+  const client =
+    sdk ??
+    new OpenRouter({
+      apiKey,
+      ...(baseUrl ? { serverURL: baseUrl } : {}),
+      timeoutMs,
+    });
 
   async function request(
     texts: string[],
     { model: m = model, dimensions = EMBED_DIMS }: EmbedRequestOptions = {},
   ): Promise<number[][]> {
-    const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), timeoutMs);
     try {
-      const res = await fetch(`${baseUrl}/embeddings`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
+      const response = (await client.embeddings.generate({
+        requestBody: {
+          model: m,
+          input: texts,
+          dimensions,
         },
-        body: JSON.stringify({ model: m, input: texts, dimensions }),
-        signal: controller.signal,
-      });
-      if (!res.ok) {
-        const status = res.status;
-        let body: string;
-        try {
-          body = await res.text();
-        } catch {
-          body = '';
-        }
-        const err: ErrorWithStatus = new Error(
-          `OpenRouter embeddings HTTP ${status}: ${body.slice(0, 200)}`,
-        );
-        err.statusCode = status;
-        err.retryable = status === 429 || status >= 500;
-        throw err;
-      }
-      const payload = (await res.json()) as EmbedResponsePayload;
-      const data = payload.data;
-      return Array.isArray(data) ? data.map((d) => d.embedding ?? []) : [];
-    } finally {
-      clearTimeout(t);
+      })) as { data?: Array<{ embedding?: number[] | string }> };
+      const data = response?.data;
+      if (!Array.isArray(data)) return [];
+      return data.map((d) => (Array.isArray(d.embedding) ? d.embedding : []));
+    } catch (err) {
+      throw toErrorWithStatus(err);
     }
   }
 
