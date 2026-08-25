@@ -36,22 +36,16 @@ Skills
 .github/skills/nodejs-strict-typescript/SKILL.md
 ```
 
-### 1.2 Load project context
+### 1.2 Project documentation
 
-Read the full build spec first — it is the single source of truth for this greenfield project:
-
-```txt
-docs/1-1-idea-specs.md
-```
-
-> document per domain in this format, example `docs/1-1-domain-2-external-client-arena.md`
+> document per domain in this format, example `docs/poc-2_gcp-sse-chatbot/1-1-domain-2-external-client-arena.md`
 
 - Important! Do not use special chars in the `Mermaid` diagram labels
 
 - template for the document
 
 ```txt
-docs/1-1-domain-X-XXX.md.  
+docs/XXX/X-X-XXX-X-XXX.md 
 ```
 
 ### 1.3 Extra Documentation
