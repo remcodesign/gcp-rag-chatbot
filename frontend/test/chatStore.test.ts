@@ -89,8 +89,18 @@ describe('chatStore — streaming (Step 6.1)', () => {
     const store = createChatStore({ send, parser: { parseSse } });
     await store.sendMessage({ sessionId: 's1', query: 'q' });
     expect(store.state.status).toBe(STATUS.ERROR);
-    expect(store.state.error).toBe('generation interrupted');
+    expect(store.state.error?.message).toBe('generation interrupted');
     expect(store.state.answer).toBe('partial');
+  });
+
+  it('carries the backend error detail through to the UI (better reporting)', async () => {
+    const frame = { id: 3, event: 'error', data: { message: 'generation interrupted', detail: { message: 'OpenRouter chat HTTP 400', statusCode: 400 } } } as TestFrame;
+    const send = makeSend([[token(2, 'partial'), frame]]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(store.state.status).toBe(STATUS.ERROR);
+    expect(store.state.error?.message).toBe('generation interrupted');
+    expect(store.state.error?.detail).toMatchObject({ message: 'OpenRouter chat HTTP 400', statusCode: 400 });
   });
 });
 
@@ -177,7 +187,7 @@ describe('chatStore — reconnection (Step 6.3)', () => {
     const store = createChatStore({ send, parser: { parseSse } }, { maxRetries: 3, retryBaseMs: 1 });
     await store.sendMessage({ sessionId: 's1', query: 'q' });
     expect(store.state.status).toBe(STATUS.ERROR);
-    expect(store.state.error).toContain('retry manually');
+    expect(store.state.error?.message).toContain('retry manually');
   });
 
   it('manual retry after a terminal error can succeed', async () => {

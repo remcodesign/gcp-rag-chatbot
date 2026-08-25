@@ -6,6 +6,7 @@ import { openSseStream } from './lib/sseTransport';
 import { renderAnswer, buildSourceChips } from './lib/citations';
 import { resolveApiBase, resolveTraceEnabled } from './lib/config';
 import { normalizeTrace, formatScore, timingBars } from './lib/trace';
+import { SAMPLE_GROUPS } from './lib/sampleQuestions';
 import type { Source } from './types/sse';
 import type { TraceHit } from './types/trace';
 
@@ -34,12 +35,26 @@ const progress = computed(() => store.state.progress);
 const answerHtml = computed(() => renderAnswer(store.state.answer));
 const chips = computed(() => buildSourceChips(store.state.sources));
 const error = computed(() => store.state.error);
+const errorMessage = computed(() => error.value?.message ?? '');
+const errorDetail = computed(() => error.value?.detail ?? null);
 const trace = computed(() => normalizeTrace(store.state.trace));
 
 const isStreaming = computed(() => status.value === STATUS.STREAMING);
 const isError = computed(() => status.value === STATUS.ERROR);
 const isGenerating = computed(() => store.state.stage === 'generating');
 const timingRows = computed(() => timingBars(trace.value?.timings ?? null));
+
+// Extracts a human-readable string from the backend's normalized error detail
+// (shape: { message?, statusCode?, retryable? }). Returns '' when there is none.
+function describeDetail(detail: unknown): string {
+  if (!detail || typeof detail !== 'object') return '';
+  const d = detail as { message?: unknown; statusCode?: unknown };
+  const parts: string[] = [];
+  if (typeof d.statusCode === 'number') parts.push(`HTTP ${d.statusCode}`);
+  if (typeof d.message === 'string' && d.message) parts.push(d.message);
+  return parts.join(' — ');
+}
+const errorDetailText = computed(() => describeDetail(errorDetail.value));
 
 // --- Timings modal (POC) ------------------------------------------------
 // A button on the "Timings" title opens a modal with two horizontal bars:
@@ -99,6 +114,18 @@ function closeChunk(): void {
 }
 const modalHtml = computed(() => (modal.value ? renderAnswer(modal.value.text) : ''));
 
+// --- Sample questions modal (POC) ---------------------------------------
+// A "+" icon to the left of the input opens a grouped picker of sample
+// questions (one group per corpus folder). Picking one sends it immediately.
+const showSamplesModal = ref(false);
+const sampleGroups = SAMPLE_GROUPS;
+function pickSample(text: string): void {
+  showSamplesModal.value = false;
+  if (!text.trim() || isStreaming.value) return;
+  input.value = '';
+  void store.sendMessage({ sessionId: sessionId.value, query: text.trim() });
+}
+
 async function submit(): Promise<void> {
   const q = input.value.trim();
   if (!q || isStreaming.value) return;
@@ -156,9 +183,12 @@ function newSession(): void {
 
       <!-- Error banner (Step 6.1 non-happy) -->
       <div v-if="isError" class="flex items-center justify-between gap-3 rounded-lg border border-(--danger) bg-(--danger-soft) px-4 py-3 text-(--danger)" role="alert">
-        <p class="m-0">{{ error }}</p>
+        <div class="min-w-0">
+          <p class="m-0 font-semibold">{{ errorMessage }}</p>
+          <p v-if="errorDetailText" class="m-0 mt-0.5 text-[12px] break-words opacity-80">{{ errorDetailText }}</p>
+        </div>
         <button
-          class="cursor-pointer rounded-lg bg-(--danger) px-3 py-1.5 text-white"
+          class="shrink-0 cursor-pointer rounded-lg bg-(--danger) px-3 py-1.5 text-white"
           @click="retry"
         >Retry</button>
       </div>
@@ -186,6 +216,14 @@ function newSession(): void {
       </section>
 
       <form class="flex flex-none gap-2" @submit.prevent="submit">
+        <button
+          type="button"
+          class="shrink-0 cursor-pointer rounded-[10px] border border-(--border) bg-(--panel) px-3 text-[20px] leading-none text-(--muted) hover:text-(--accent) disabled:cursor-default disabled:opacity-50"
+          :disabled="isStreaming"
+          :title="'Sample questions'"
+          aria-label="Sample questions"
+          @click="showSamplesModal = true"
+        >+</button>
         <input
           v-model="input"
           type="text"
@@ -419,6 +457,53 @@ function newSession(): void {
                 <span class="inline-block h-2.5 w-2.5 rounded-sm" :style="{ background: timingColor(row.label) }"></span>
                 {{ row.label }} · {{ row.ms }}ms
               </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Sample questions modal (POC): grouped quick-starts from the corpus -->
+    <Teleport to="body">
+      <div
+        v-if="showSamplesModal"
+        class="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(15,23,42,0.5)] p-6"
+        @click.self="showSamplesModal = false"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Sample questions"
+      >
+        <div class="flex max-h-[82vh] w-[min(560px,100%)] flex-col overflow-hidden rounded-xl bg-(--panel) shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+          <div class="flex flex-none items-center justify-between border-b border-(--border) px-4.5 py-3.5">
+            <h2 class="m-0 text-[16px] font-bold">Sample questions</h2>
+            <button
+              class="cursor-pointer border-none bg-transparent text-2xl leading-none text-(--muted) hover:text-(--text)"
+              type="button"
+              @click="showSamplesModal = false"
+              aria-label="Close"
+            >×</button>
+          </div>
+          <div class="no-scrollbar overflow-y-auto p-5">
+            <p class="m-0 mb-4 text-[12px] text-(--muted)">
+              Pick a question to get started. Select one and it sends immediately.
+            </p>
+            <div
+              v-for="group in sampleGroups"
+              :key="group.folder"
+              class="mb-5 last:mb-0"
+            >
+              <h3 class="m-0 mb-2 text-[11px] font-bold uppercase tracking-[0.06em] text-(--muted)">
+                {{ group.label }}
+              </h3>
+              <div class="flex flex-col gap-1.5">
+                <button
+                  v-for="q in group.questions"
+                  :key="q.text"
+                  type="button"
+                  class="cursor-pointer rounded-lg border border-(--border) bg-(--bg) px-3 py-2 text-left text-[13px] text-(--text) transition-colors hover:border-(--accent) hover:text-(--accent)"
+                  @click="pickSample(q.text)"
+                >{{ q.text }}</button>
+              </div>
             </div>
           </div>
         </div>

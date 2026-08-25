@@ -138,10 +138,15 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
       case 'trace':
         state.trace = frame.data as RawTrace;
         break;
-      case 'error':
-        state.error = (frame.data as SseError).message ?? 'generation interrupted';
+      case 'error': {
+        const err = frame.data as SseError;
+        state.error = {
+          message: err.message ?? 'generation interrupted',
+          detail: err.detail,
+        };
         state.status = 'error';
         break;
+      }
       default:
         break;
     }
@@ -183,7 +188,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     state.citations = [];
     state.sources = [];
     state.trace = null;
-    state.error = '';
+    state.error = null;
     state.retryCount = 0;
     state.lastEventId = null;
 
@@ -193,7 +198,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
       if (getStatus() === STATUS.ERROR) return; // terminal error surfaced
       if (state.retryCount >= maxRetries) {
         state.status = STATUS.ERROR;
-        state.error = 'connection lost — retry manually';
+        state.error = { message: 'connection lost — retry manually' };
         return;
       }
       state.retryCount += 1;
@@ -205,7 +210,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
   async function retry(): Promise<void> {
     if (!sessionId || !query) return;
     state.status = STATUS.STREAMING;
-    state.error = '';
+    state.error = null;
     state.retryCount = 0;
     for (;;) {
       const { ok } = await runStream();
@@ -213,7 +218,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
       if (getStatus() === STATUS.ERROR) return;
       if (state.retryCount >= maxRetries) {
         state.status = STATUS.ERROR;
-        state.error = 'connection lost — retry manually';
+        state.error = { message: 'connection lost — retry manually' };
         return;
       }
       state.retryCount += 1;
@@ -232,7 +237,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     state.citations = [];
     state.sources = [];
     state.trace = null;
-    state.error = '';
+    state.error = null;
     state.lastEventId = null;
     state.retryCount = 0;
   }

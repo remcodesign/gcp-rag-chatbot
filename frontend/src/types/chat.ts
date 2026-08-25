@@ -40,6 +40,13 @@ export interface ChatStoreOptions {
   trace?: boolean;
 }
 
+/** A structured error surfaced to the UI (from the SSE `error` event). */
+export interface ChatError {
+  message: string;
+  /** Raw `error.detail` from the backend (normalized provider error). */
+  detail?: unknown;
+}
+
 /** The reactive chat state exposed to the UI. */
 export interface ChatState {
   status: ChatStatus;
@@ -49,7 +56,7 @@ export interface ChatState {
   citations: Citation[];
   sources: Source[];
   trace: RawTrace | null;
-  error: string | null;
+  error: ChatError | null;
   lastEventId: number | null;
   retryCount: number;
 }

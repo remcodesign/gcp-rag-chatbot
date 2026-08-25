@@ -27,12 +27,15 @@ import type { ChatProvider, ChatStream, ChatStreamChunk, ChatParams } from '../l
 const PORT = Number(process.env.PORT ?? 8080);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-oss-20b';
-// THINKING_MODE_ON mirrors the Terraform `thinking_mode_on` variable. When
-// truthy, model "thinking"/reasoning stays on (no override). When off/absent,
-// disable thinking via OpenRouter's unified `reasoning` param (effort: 'none')
-// — faster + fewer tokens, at the cost of answer depth.
+// THINKING_MODE_ON mirrors the Terraform `thinking_mode_on` variable. Default
+// off: send NO `reasoning` override, so the model keeps its native behavior
+// (gpt-oss is natively non-thinking and its concrete slug would REJECT an
+// unsupported `reasoning` param with a 400 — the root cause of the
+// "generation interrupted" error). Only when thinking is ON for a
+// reasoning-capable model do we send an override.
+const REASONING_CAPABLE_MODEL = !/gpt-oss/i.test(CHAT_MODEL);
 const THINKING_MODE_ON = (process.env.THINKING_MODE_ON ?? '') === 'true';
-const reasoning = THINKING_MODE_ON ? undefined : { effort: 'none' };
+const reasoning = THINKING_MODE_ON && REASONING_CAPABLE_MODEL ? { effort: 'high' } : undefined;
 
 type ErrorWithStatus = Error & { statusCode?: number; retryable?: boolean };
 
