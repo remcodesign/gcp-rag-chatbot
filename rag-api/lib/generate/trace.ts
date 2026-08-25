@@ -87,17 +87,6 @@ export function buildTrace(
         ...(typeof generation === 'number' && typeof outcome.timings.total === 'number'
           ? { e2e: outcome.timings.total + generation }
           : {}),
-        ...(typeof outcome.timings.overhead !== 'number'
-          ? {
-              overhead: Math.max(
-                0,
-                outcome.timings.total -
-                  outcome.timings.embed -
-                  outcome.timings.retrieval -
-                  outcome.timings.rerank,
-              ),
-            }
-          : {}),
       }
     : null;
 

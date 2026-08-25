@@ -23,6 +23,8 @@ export interface ChatParams {
   messages: ChatMessage[];
   stream: boolean;
   signal?: AbortSignal;
+  /** OpenRouter `reasoning` override (e.g. `{ effort: 'none' }` to disable thinking). */
+  reasoning?: Record<string, unknown>;
 }
 
 export interface ChatProvider {

@@ -31,3 +31,9 @@ variable "terraform_runner_sa" {
   type        = string
   default     = "terraform-runner"
 }
+
+variable "thinking_mode_on" {
+  description = "Enable LLM reasoning/thinking on rag-api chat (default false = non-thinking, faster/cheaper). For now a git-committed fixed choice; could later be driven per-session from Firestore."
+  type        = bool
+  default     = false
+}

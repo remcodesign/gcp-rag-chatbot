@@ -42,9 +42,17 @@ resource "google_cloud_run_service" "api" {
             }
           }
         }
+
+        # Thinking mode toggle (variable-controlled, git-committed). Maps 1:1 to
+        # the rag-api env var of the same name; when false, rag-api disables LLM
+        # reasoning (effort: "none") for faster, cheaper generation.
+        env {
+          name  = "THINKING_MODE_ON"
+          value = var.thinking_mode_on ? "true" : "false"
+        }
       }
 
-service_account_name = google_service_account.api.email
+      service_account_name = google_service_account.api.email
     }
   }
 
@@ -57,9 +65,9 @@ service_account_name = google_service_account.api.email
 # Demo: public. Switch to allAuthenticatedUsers + Identity Platform for prod.
 resource "google_cloud_run_service_iam_member" "public" {
   service  = google_cloud_run_service.api.name
-  location  = var.region
-  role      = "roles/run.invoker"
-  member    = "allUsers"
+  location = var.region
+  role     = "roles/run.invoker"
+  member   = "allUsers"
 }
 
 # --- Frontend: the separate static site (Cloud Run Service) ---

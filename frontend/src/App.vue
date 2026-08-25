@@ -42,20 +42,34 @@ const isGenerating = computed(() => store.state.stage === 'generating');
 const timingRows = computed(() => timingBars(trace.value?.timings ?? null));
 
 // --- Timings modal (POC) ------------------------------------------------
-// A button on the "Timings" title opens a modal with a vertical bar graph of
-// the per-stage timings (E2E on top, then the parts below) plus a legend.
+// A button on the "Timings" title opens a modal with two horizontal bars:
+// the E2E total on top, and below it the per-stage timings stacked so they
+// (ideally) sum to E2E. Same bar width; the stack visually "fills" E2E.
 const showTimingsModal = ref(false);
-/** Stable color per timing row label (used for the vertical bars + legend). */
+/** Stable color per timing row label (used for the stacked bar + legend). */
 const TIMING_COLORS: Record<string, string> = {
   Embed: 'var(--accent)',
   Retrieve: '#38bdf8',
   Rerank: '#a78bfa',
   Generate: '#34d399',
-  Overhead: '#fbbf24',
   E2E: '#f87171',
 };
 function timingColor(label: string): string {
   return TIMING_COLORS[label] ?? 'var(--accent)';
+}
+/** The stage rows (everything except E2E), for the stacked breakdown bar. */
+const stageRows = computed(() => timingRows.value.filter((r) => r.label !== 'E2E'));
+/** The E2E row, if present. */
+const e2eRow = computed(() => timingRows.value.find((r) => r.label === 'E2E') ?? null);
+/** Sum of the stage timings (Embed + Retrieve + Rerank + Generate). */
+const stageMsTotal = computed(() =>
+  stageRows.value.reduce((acc, r) => acc + r.ms, 0),
+);
+/** Width of a stage segment as a % of the summed stages (so the stack fills 100%). */
+function stagePct(ms: number): number {
+  const total = stageMsTotal.value;
+  if (!total) return 0;
+  return (ms / total) * 100;
 }
 
 // --- Chunk modal (POC) ------------------------------------------------
@@ -358,20 +372,38 @@ function newSession(): void {
           </div>
           <div class="no-scrollbar overflow-y-auto p-5">
             <p class="m-0 mb-4 text-[12px] text-(--muted)">
-              End-to-end time from request to last token, then the per-stage breakdown.
+              E2E time from request to last token; below it, the per-stage
+              breakdown stacked so it should sum to E2E.
             </p>
 
-            <!-- Vertical bar chart: E2E on top, parts below -->
-            <div class="flex items-end justify-center gap-3" style="height: 220px">
-              <div
-                v-for="row in timingRows"
-                :key="row.label"
-                class="flex h-full w-12 flex-col items-center justify-end gap-1"
-              >
-                <span class="text-[10px] font-semibold text-(--text)">{{ row.ms }}ms</span>
+            <!-- E2E bar -->
+            <div class="mb-6">
+              <div class="mb-1 flex items-center justify-between text-[11px]">
+                <span class="font-semibold text-(--text)">E2E</span>
+                <span class="font-semibold text-(--text)">{{ e2eRow ? e2eRow.ms : '—' }}ms</span>
+              </div>
+              <div class="h-5 overflow-hidden rounded-full bg-(--border)">
                 <div
-                  class="w-full rounded-t-md transition-[height] duration-300"
-                  :style="{ height: Math.max(row.pct, 2) + '%', background: timingColor(row.label) }"
+                  class="h-full w-full rounded-full"
+                  :style="{ background: timingColor('E2E') }"
+                ></div>
+              </div>
+            </div>
+
+            <!-- Stacked per-stage bar -->
+            <div>
+              <div class="mb-1 flex items-center justify-between text-[11px]">
+                <span class="font-semibold text-(--text)">Breakdown</span>
+                <span class="font-semibold text-(--text)">{{ stageMsTotal }}ms</span>
+              </div>
+              <div class="flex h-5 w-full overflow-hidden rounded-full bg-(--border)">
+                <div
+                  v-for="row in stageRows"
+                  :key="row.label"
+                  :style="{
+                    width: stagePct(row.ms) + '%',
+                    background: timingColor(row.label),
+                  }"
                   :title="`${row.label}: ${row.ms}ms`"
                 ></div>
               </div>
@@ -380,12 +412,12 @@ function newSession(): void {
             <!-- Legend -->
             <div class="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
               <span
-                v-for="row in timingRows"
+                v-for="row in stageRows"
                 :key="row.label"
                 class="flex items-center gap-1.5 text-[11px] text-(--muted)"
               >
                 <span class="inline-block h-2.5 w-2.5 rounded-sm" :style="{ background: timingColor(row.label) }"></span>
-                {{ row.label }}
+                {{ row.label }} · {{ row.ms }}ms
               </span>
             </div>
           </div>

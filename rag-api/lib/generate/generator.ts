@@ -43,7 +43,9 @@ export const SYSTEM_PROMPT =
   
   'If you cannot answer from the context, say "I don\'t know" and do not make up an answer.' +
   'Do not cite sources that are not in the context.' +
-  'Do not invent sources or fabricate citations. Or just new text outside the context.';
+  'Do not invent sources or fabricate citations. Or just new text outside the context.' +
+
+  '! Output in the Dutch language.';
 
 const DEFAULT_MAX_REGEN_RETRIES = 2;
 
@@ -57,6 +59,8 @@ interface GeneratorDeps {
 
 export interface GeneratorOptions {
   maxRegenRetries?: number;
+  /** Default OpenRouter `reasoning` override applied to every generation call. */
+  reasoning?: Record<string, unknown>;
 }
 
 interface TokenOutcome {
@@ -68,7 +72,7 @@ export interface GenerateOnceInput {
   sse?: Sse | null;
   messages: ChatMessage[];
   sourceMap: SourceMap;
-  request?: { model?: string | null; signal?: AbortSignal } | null;
+  request?: { model?: string | null; signal?: AbortSignal; reasoning?: Record<string, unknown> } | null;
   onToken?: (out: TokenOutcome) => void;
 }
 
@@ -92,6 +96,8 @@ export interface StreamAnswerOptions {
   trace?: boolean;
   model?: string | null;
   signal?: AbortSignal;
+  /** OpenRouter `reasoning` override for this request. */
+  reasoning?: Record<string, unknown>;
 }
 
 export interface Generator {
@@ -109,6 +115,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
     error: deps.logger?.error ?? (() => {}),
   };
   const maxRegenRetries = options.maxRegenRetries ?? DEFAULT_MAX_REGEN_RETRIES;
+  const defaultReasoning = options.reasoning;
 
   async function generateOnce({
     sse,
@@ -121,6 +128,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
       messages,
       model: request?.model ?? undefined,
       signal: request?.signal ?? undefined,
+      reasoning: request?.reasoning ?? defaultReasoning,
     });
     const stream: ChatStream = opened.stream;
 

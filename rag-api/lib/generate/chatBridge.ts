@@ -34,6 +34,7 @@ interface ChatBridgeDeps {
 
 interface ChatBridgeOptions {
   model?: string;
+  reasoning?: Record<string, unknown>;
   requestId?: () => string;
 }
 
@@ -41,6 +42,8 @@ export interface StreamReplyInput {
   messages: ChatMessage[];
   model?: string | null;
   signal?: AbortSignal;
+  /** OpenRouter `reasoning` override; falls back to the factory option. */
+  reasoning?: Record<string, unknown>;
 }
 
 export interface ChatBridge {
@@ -54,18 +57,22 @@ export interface ChatBridge {
 
 export function createChatBridge(deps: ChatBridgeDeps, options: ChatBridgeOptions = {}): ChatBridge {
   const model = options.model;
+  const reasoning = options.reasoning;
   const requestId = options.requestId ?? (() => `gen-${++_counter}`);
 
   async function requestParams({
     messages,
     model: m,
     signal,
+    reasoning: r,
   }: StreamReplyInput): Promise<ChatParams> {
+    const effectiveReasoning = r ?? reasoning;
     return {
       model: m ?? model,
       messages,
       stream: true,
       ...(signal ? { signal } : {}),
+      ...(effectiveReasoning ? { reasoning: effectiveReasoning } : {}),
     };
   }
 

@@ -27,6 +27,12 @@ import type { ChatProvider, ChatStream, ChatStreamChunk, ChatParams } from '../l
 const PORT = Number(process.env.PORT ?? 8080);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-oss-20b';
+// THINKING_MODE_ON mirrors the Terraform `thinking_mode_on` variable. When
+// truthy, model "thinking"/reasoning stays on (no override). When off/absent,
+// disable thinking via OpenRouter's unified `reasoning` param (effort: 'none')
+// — faster + fewer tokens, at the cost of answer depth.
+const THINKING_MODE_ON = (process.env.THINKING_MODE_ON ?? '') === 'true';
+const reasoning = THINKING_MODE_ON ? undefined : { effort: 'none' };
 
 type ErrorWithStatus = Error & { statusCode?: number; retryable?: boolean };
 
@@ -53,7 +59,10 @@ function createRuntime(): {
     { embedTimeoutMs: 8000, retrieveTimeoutMs: 4000, minScore: 0.35, maxSources: 5 },
   );
   const bridge = createChatBridge(createOpenRouterClient(), { model: CHAT_MODEL });
-  const generator = createGenerator({ bridge, pipeline, store: state });
+  const generator = createGenerator(
+    { bridge, pipeline, store: state },
+    { reasoning },
+  );
   const { handleLiveness, handleReadiness } = createHealth({ firestore });
 
   /**
@@ -149,6 +158,7 @@ function createOpenRouterClient(): { chat: ChatProvider } {
             model: params.model,
             messages: params.messages,
             stream: true,
+            ...(params.reasoning ? { reasoning: params.reasoning } : {}),
           }),
           signal: controller.signal,
         });

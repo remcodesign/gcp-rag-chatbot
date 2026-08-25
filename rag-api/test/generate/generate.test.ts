@@ -208,6 +208,29 @@ describe('Step 5.2 — OpenRouter streaming call', () => {
       gen.generateOnce({ sse: null, messages: [], sourceMap: {}, request: null }),
     ).rejects.toMatchObject({ message: '500' });
   });
+
+  it('forwards the reasoning override to the bridge (non-thinking mode)', async () => {
+    let received: unknown;
+    const bridge = {
+      normalizeError,
+      streamReply: async (input: { reasoning?: unknown }) => {
+        received = input.reasoning;
+        return { requestId: 'r0', model: 'm', stream: streamOf([]) };
+      },
+    };
+    const gen = createGenerator({
+      bridge,
+      pipeline: stalePipeline(),
+      store: { persistMessage: async () => {} },
+    });
+    await gen.generateOnce({
+      sse: null,
+      messages: [],
+      sourceMap: {},
+      request: { reasoning: { effort: 'none' } },
+    });
+    expect(received).toEqual({ effort: 'none' });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -427,13 +450,11 @@ describe('RAG trace event (POC sidebar data)', () => {
 
     const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
     expect(traceFrames).toHaveLength(1);
-    const timings = (traceFrames[0]?.data as { timings?: { generation?: number; e2e?: number; total?: number; overhead?: number } }).timings;
+    const timings = (traceFrames[0]?.data as { timings?: { generation?: number; e2e?: number; total?: number } }).timings;
     expect(timings).toBeDefined();
     expect(typeof timings?.generation).toBe('number');
     expect((timings?.generation ?? -1) >= 0).toBe(true);
     // E2E = pipeline total + generation.
     expect(timings?.e2e).toBe((timings?.total ?? 0) + (timings?.generation ?? 0));
-    // Overhead = total - (embed + retrieval + rerank).
-    expect(timings?.overhead).toBe((timings?.total ?? 0) - 10 - 20 - 5);
   });
 });

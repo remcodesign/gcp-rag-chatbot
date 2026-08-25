@@ -81,7 +81,6 @@ export function timingBars(timings: TraceTimings | null | undefined): TimingBar[
     { label: 'Retrieve', ms: timings.retrieval },
     { label: 'Rerank', ms: timings.rerank },
     { label: 'Generate', ms: timings.generation ?? 0 },
-    { label: 'Overhead', ms: timings.overhead ?? Math.max(0, timings.total - timings.embed - timings.retrieval - timings.rerank) },
     { label: 'E2E', ms: timings.e2e ?? timings.total + (timings.generation ?? 0) },
   ];
   const max = Math.max(...rows.map((r) => r.ms), 1);

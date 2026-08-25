@@ -62,8 +62,6 @@ export interface StageTimings {
   total: number;
   /** End-to-end total (ms): pipeline `total` + LLM `generation`. */
   e2e?: number;
-  /** Pipeline overhead (ms): `total - (embed + retrieval + rerank)` — classify + context build + scheduling. */
-  overhead?: number;
 }
 
 export interface RerankInfo {
