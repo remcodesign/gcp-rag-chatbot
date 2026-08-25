@@ -43,7 +43,14 @@ export interface TraceTimings {
   embed: number;
   retrieval: number;
   rerank: number;
+  /** LLM generation time (ms), measured by the backend generator. */
+  generation?: number;
+  /** RAG-pipeline total (ms): classify + embed + retrieve + rerank + context build. */
   total: number;
+  /** End-to-end total (ms): pipeline `total` + LLM `generation`. */
+  e2e?: number;
+  /** Pipeline overhead (ms): `total - (embed + retrieval + rerank)` — classify + context build + scheduling. */
+  overhead?: number;
 }
 
 /** Retrieval-error diagnosis (when retrieval degraded). */

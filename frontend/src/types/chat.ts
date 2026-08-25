@@ -11,7 +11,7 @@ import type { RawTrace } from './trace';
 export type ChatStatus = 'idle' | 'streaming' | 'done' | 'error';
 
 /** Backend progress stage keys (mirrors `rag-api/lib/generate/generator.js`). */
-export type ProgressStage = 'retrieval' | 'rerank' | 'generation';
+export type ProgressStage = 'retrieval' | 'rerank' | 'generation' | 'generating';
 
 /** A parsed frame yielded by the SSE transport to the store. */
 export type ParsedFrame = SseFrame;

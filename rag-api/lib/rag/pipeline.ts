@@ -57,7 +57,7 @@ export function createPipeline(deps: PipelineDeps, options: PipelineOptions = {}
         sources: [],
         classification,
         rerankInfo: null,
-        timings: { embed: t1 - t0, retrieval: 0, rerank: 0, total: t1 - t0 },
+        timings: { embed: t1 - t0, retrieval: 0, rerank: 0, total: t1 - t0, overhead: 0 },
         timedOut: true,
         rewriteRequested: classification.rewrite,
       };
@@ -81,7 +81,13 @@ export function createPipeline(deps: PipelineDeps, options: PipelineOptions = {}
       sources: context.sources,
       classification,
       rerankInfo: { didRerank: rerankOutcome.didRerank, reason: rerankOutcome.reason },
-      timings: { embed: t1 - t0, retrieval: t2 - t1, rerank: t3 - t2, total: t3 - t0 },
+      timings: {
+        embed: t1 - t0,
+        retrieval: t2 - t1,
+        rerank: t3 - t2,
+        total: t3 - t0,
+        overhead: (t3 - t0) - (t1 - t0) - (t2 - t1) - (t3 - t2),
+      },
       timedOut: false,
       rewriteRequested: classification.rewrite,
     };

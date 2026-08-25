@@ -5,7 +5,7 @@ import { STAGE_LABELS } from './lib/chatStore';
 import { openSseStream } from './lib/sseTransport';
 import { renderAnswer, buildSourceChips } from './lib/citations';
 import { resolveApiBase, resolveTraceEnabled } from './lib/config';
-import { normalizeTrace, formatScore } from './lib/trace';
+import { normalizeTrace, formatScore, timingBars } from './lib/trace';
 import type { Source } from './types/sse';
 import type { TraceHit } from './types/trace';
 
@@ -38,6 +38,25 @@ const trace = computed(() => normalizeTrace(store.state.trace));
 
 const isStreaming = computed(() => status.value === STATUS.STREAMING);
 const isError = computed(() => status.value === STATUS.ERROR);
+const isGenerating = computed(() => store.state.stage === 'generating');
+const timingRows = computed(() => timingBars(trace.value?.timings ?? null));
+
+// --- Timings modal (POC) ------------------------------------------------
+// A button on the "Timings" title opens a modal with a vertical bar graph of
+// the per-stage timings (E2E on top, then the parts below) plus a legend.
+const showTimingsModal = ref(false);
+/** Stable color per timing row label (used for the vertical bars + legend). */
+const TIMING_COLORS: Record<string, string> = {
+  Embed: 'var(--accent)',
+  Retrieve: '#38bdf8',
+  Rerank: '#a78bfa',
+  Generate: '#34d399',
+  Overhead: '#fbbf24',
+  E2E: '#f87171',
+};
+function timingColor(label: string): string {
+  return TIMING_COLORS[label] ?? 'var(--accent)';
+}
 
 // --- Chunk modal (POC) ------------------------------------------------
 // Opening a source chip / trace hit shows the chunk text in a modal instead of
@@ -108,11 +127,15 @@ function newSession(): void {
 
       <!-- Progress indicator (Step 6.2) -->
       <div v-if="isStreaming" class="flex items-center gap-3 text-sm text-(--muted)" role="status" aria-live="polite">
-        <span>{{ stageLabel }}</span>
+        <span class="flex items-center gap-1.5">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          {{ stageLabel }}
+        </span>
         <span class="h-1.5 flex-1 overflow-hidden rounded-full bg-(--border)">
           <span
             class="block h-full bg-(--accent) transition-[width] duration-300"
-            :style="{ width: progress + '%' }"
+            :class="{ 'bar-breathing': isGenerating }"
+            :style="isGenerating ? undefined : { width: progress + '%' }"
           ></span>
         </span>
       </div>
@@ -189,13 +212,51 @@ function newSession(): void {
               Retrieval failed — answering without context. {{ trace.error.message }}
             </section>
 
-            <div class="mb-4">
+            <div class="mb-6">
               <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Query</h3>
               <p class="m-0 mb-1 text-[14px] font-semibold">{{ trace.query }}</p>
               <p class="my-0.5 text-[12px] text-(--muted)">Classification: {{ trace.classification }}</p>
             </div>
 
-            <div class="mb-4">
+
+               <div class="mb-6">
+              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Rerank</h3>
+              <p class="my-0.5 text-[12px] text-(--muted)">
+                {{ trace.rerank.didRerank ? 'Reranked' : 'Skipped rerank' }} — {{ trace.rerank.reason }}
+              </p>
+            </div>
+
+           
+            
+            <div class="mb-6">
+              <div class="mb-1.5 flex items-center justify-between">
+                <h3 class="m-0 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Timings</h3>
+                <button
+                  v-if="timingRows.length"
+                  class="cursor-pointer rounded border border-(--border) px-2 py-0.5 text-[11px] text-(--muted) hover:text-(--text)"
+                  type="button"
+                  @click="showTimingsModal = true"
+                >Graph</button>
+              </div>
+              <div v-if="timingRows.length" class="mt-2 flex flex-col gap-1.5">
+                <div
+                  v-for="row in timingRows"
+                  :key="row.label"
+                  class="flex items-center gap-2 text-[11px]"
+                >
+                  <span class="w-14 shrink-0 text-(--muted)">{{ row.label }}</span>
+                  <span class="h-2 flex-1 overflow-hidden rounded-full bg-(--border)">
+                    <span
+                      class="block h-full rounded-full"
+                      :style="{ width: row.pct + '%', background: timingColor(row.label) }"
+                    ></span>
+                  </span>
+                  <span class="w-14 shrink-0 text-right font-semibold text-(--text)">{{ row.ms }}ms</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="mb-6">
               <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Retrieval ({{ trace.retrieved.length }})</h3>
               <ul class="m-0 flex list-none flex-col gap-2 p-0">
                 <li
@@ -221,18 +282,9 @@ function newSession(): void {
               </ul>
             </div>
 
-            <div class="mb-4">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Rerank</h3>
-              <p class="my-0.5 text-[12px] text-(--muted)">
-                {{ trace.rerank.didRerank ? 'Reranked' : 'Skipped rerank' }} — {{ trace.rerank.reason }}
-              </p>
-              <p v-if="trace.timings" class="my-0.5 text-[12px] text-(--muted)">
-                Embed {{ trace.timings.embed }}ms · Retrieve {{ trace.timings.retrieval }}ms ·
-                Rerank {{ trace.timings.rerank }}ms
-              </p>
-            </div>
+          
 
-            <div class="mb-4">
+            <div class="mb-6">
               <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Context passed to LLM ({{ trace.context.sources.length }})</h3>
               <ol class="m-0 pl-4 text-[12px] text-(--muted)">
                 <li v-for="s in trace.context.sources" :key="s.id" class="my-0.5">{{ s.id }}</li>
@@ -241,7 +293,7 @@ function newSession(): void {
 
             <div v-if="trace.finalPrompt" class="mb-4">
               <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Final prompt</h3>
-              <pre class="no-scrollbar m-0 max-h-60 overflow-y-auto whitespace-pre-wrap rounded-lg border border-(--border) bg-(--bg) px-2.5 py-2.5 text-[11px] text-(--text)">{{ trace.finalPrompt }}</pre>
+              <pre class="no-scrollbar m-0 max-h-120 overflow-y-auto whitespace-pre-wrap rounded-lg border border-(--border) bg-(--bg) px-2.5 py-2.5 text-[11px] text-(--text)">{{ trace.finalPrompt }}</pre>
             </div>
           </template>
         </div>
@@ -272,11 +324,70 @@ function newSession(): void {
             <p class="my-0 mb-3 break-all text-[12px] text-(--muted)">
               <span v-if="modal.score != null">score {{ formatScore(modal.score) }} · </span>
               <code class="rounded bg-(--accent-soft) px-1">{{ modal.id }}</code>
-              <template v-if="modal.url && modal.url !== '#'">
+
+              <!-- <template v-if="modal.url && modal.url !== '#'">
                 · <a class="text-(--accent)" :href="modal.url" target="_blank" rel="noopener">open page</a>
-              </template>
+              </template> -->
+
             </p>
             <div class="answer leading-normal" v-html="modalHtml"></div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Timings modal (POC): vertical bar graph of the per-stage timings -->
+    <Teleport to="body">
+      <div
+        v-if="showTimingsModal"
+        class="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(15,23,42,0.5)] p-6"
+        @click.self="showTimingsModal = false"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Timings graph"
+      >
+        <div class="flex max-h-[82vh] w-[min(520px,100%)] flex-col overflow-hidden rounded-xl bg-(--panel) shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
+          <div class="flex flex-none items-center justify-between border-b border-(--border) px-4.5 py-3.5">
+            <h2 class="m-0 text-[16px] font-bold">Timings</h2>
+            <button
+              class="cursor-pointer border-none bg-transparent text-2xl leading-none text-(--muted) hover:text-(--text)"
+              type="button"
+              @click="showTimingsModal = false"
+              aria-label="Close"
+            >×</button>
+          </div>
+          <div class="no-scrollbar overflow-y-auto p-5">
+            <p class="m-0 mb-4 text-[12px] text-(--muted)">
+              End-to-end time from request to last token, then the per-stage breakdown.
+            </p>
+
+            <!-- Vertical bar chart: E2E on top, parts below -->
+            <div class="flex items-end justify-center gap-3" style="height: 220px">
+              <div
+                v-for="row in timingRows"
+                :key="row.label"
+                class="flex h-full w-12 flex-col items-center justify-end gap-1"
+              >
+                <span class="text-[10px] font-semibold text-(--text)">{{ row.ms }}ms</span>
+                <div
+                  class="w-full rounded-t-md transition-[height] duration-300"
+                  :style="{ height: Math.max(row.pct, 2) + '%', background: timingColor(row.label) }"
+                  :title="`${row.label}: ${row.ms}ms`"
+                ></div>
+              </div>
+            </div>
+
+            <!-- Legend -->
+            <div class="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
+              <span
+                v-for="row in timingRows"
+                :key="row.label"
+                class="flex items-center gap-1.5 text-[11px] text-(--muted)"
+              >
+                <span class="inline-block h-2.5 w-2.5 rounded-sm" :style="{ background: timingColor(row.label) }"></span>
+                {{ row.label }}
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -393,6 +504,32 @@ function newSession(): void {
 
 /* Modal body padding-below so the content isn't flush against the bottom. */
 .modal-body { padding-bottom: 1.5rem; }
+
+/* Animated "busy" dots next to the stage label (Problem C). */
+.dots { display: inline-flex; gap: 3px; }
+.dots i {
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  background: var(--accent);
+  animation: dot-pulse 1.2s ease-in-out infinite;
+}
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dot-pulse {
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
+
+/* Indeterminate "breathing" bar while tokens are flowing (Problem C). */
+.bar-breathing {
+  width: 100%;
+  animation: bar-breathe 1.4s ease-in-out infinite;
+}
+@keyframes bar-breathe {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 1; }
+}
 
 /* Drawer slide-in/out transition (used around the trace <aside>). */
 .drawer-enter-active, .drawer-leave-active { transition: transform 0.25s ease, opacity 0.25s ease; }

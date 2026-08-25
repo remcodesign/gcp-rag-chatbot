@@ -15,6 +15,7 @@ import type {
   TraceClassification,
   TraceContext,
   TraceRerank,
+  TraceTimings,
 } from '../types/trace';
 
 /** Parses the classification reason into a short human label. */
@@ -50,10 +51,43 @@ export function normalizeTrace(trace: RawTrace | null | undefined): NormalizedTr
 /**
  * Rounds a score to a percentage or returns a placeholder when absent/NaN.
  *
- * @param score a 0..1 similarity score, or a non-numeric value.
+ * @param score a score from 0..1, or a non-numeric value.
  * @returns a `NN%` string, or the placeholder `—`.
  */
 export function formatScore(score: number | null | undefined): string {
   if (typeof score !== 'number' || !Number.isFinite(score)) return '—';
   return `${(score * 100).toFixed(0)}%`;
+}
+
+/** A single timing bar row for the debug sidebar. */
+export interface TimingBar {
+  label: string;
+  ms: number;
+  /** Width as a percentage of the largest stage (0..100). */
+  pct: number;
+}
+
+/**
+ * Maps per-stage timings into stacked horizontal bars so the bottleneck is
+ * visible at a glance. Widths are proportional to the largest stage.
+ *
+ * @param timings the trace timings (may be partial / missing `generation`).
+ * @returns an ordered list of `{ label, ms, pct }` rows, or `[]` when absent.
+ */
+export function timingBars(timings: TraceTimings | null | undefined): TimingBar[] {
+  if (!timings) return [];
+  const rows: Array<{ label: string; ms: number }> = [
+    { label: 'Embed', ms: timings.embed },
+    { label: 'Retrieve', ms: timings.retrieval },
+    { label: 'Rerank', ms: timings.rerank },
+    { label: 'Generate', ms: timings.generation ?? 0 },
+    { label: 'Overhead', ms: timings.overhead ?? Math.max(0, timings.total - timings.embed - timings.retrieval - timings.rerank) },
+    { label: 'E2E', ms: timings.e2e ?? timings.total + (timings.generation ?? 0) },
+  ];
+  const max = Math.max(...rows.map((r) => r.ms), 1);
+  return rows.map((r) => ({
+    label: r.label,
+    ms: r.ms,
+    pct: Math.round((r.ms / max) * 100),
+  }));
 }

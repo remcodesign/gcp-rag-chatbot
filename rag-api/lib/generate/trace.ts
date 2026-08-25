@@ -52,9 +52,14 @@ export function serializeHit(
 
 interface BuildTraceInput {
   messages?: ChatMessage[];
+  /** LLM generation time (ms), measured by the generator around the stream. */
+  generation?: number;
 }
 
-export function buildTrace(outcome: Partial<RunOutcome> = {}, { messages }: BuildTraceInput = {}): TracePayload {
+export function buildTrace(
+  outcome: Partial<RunOutcome> = {},
+  { messages, generation }: BuildTraceInput = {},
+): TracePayload {
   const hits = Array.isArray(outcome.retrievalHits) ? outcome.retrievalHits : [];
   const sourceMap = outcome.sourceMap || {};
 
@@ -75,13 +80,34 @@ export function buildTrace(outcome: Partial<RunOutcome> = {}, { messages }: Buil
     length: (outcome.context || '').length,
   };
 
+  const timings = outcome.timings
+    ? {
+        ...outcome.timings,
+        ...(typeof generation === 'number' ? { generation } : {}),
+        ...(typeof generation === 'number' && typeof outcome.timings.total === 'number'
+          ? { e2e: outcome.timings.total + generation }
+          : {}),
+        ...(typeof outcome.timings.overhead !== 'number'
+          ? {
+              overhead: Math.max(
+                0,
+                outcome.timings.total -
+                  outcome.timings.embed -
+                  outcome.timings.retrieval -
+                  outcome.timings.rerank,
+              ),
+            }
+          : {}),
+      }
+    : null;
+
   const payload: TracePayload = {
     query: preview(outcome.query ?? '', QUERY_PREVIEW_CHARS),
     classification: outcome.classification ?? null,
     retrieved,
     rerank,
     context,
-    timings: outcome.timings || null,
+    timings,
     timedOut: !!(outcome.timedOut || outcome.error),
   };
 

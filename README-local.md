@@ -2,9 +2,9 @@
 
 ---
 
-now lets build and document `docs`:
+now lets build and document `docs/poc-2 gcp-sse-chatbot/1-1-idea-specs.md`:
 
-- `## Domain 9: Tooling — TypeScript + ESLint + Tailwind across all code`
+- `## TODO - Domain 7: Production Hardening (SSE pitfalls)`
 
 ---
 

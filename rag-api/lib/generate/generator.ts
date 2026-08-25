@@ -34,11 +34,16 @@ export const STAGES = {
   RETRIEVAL: 'retrieval',
   RERANK: 'rerank',
   GENERATION: 'generation',
+  GENERATING: 'generating',
 } as const;
 
 export const SYSTEM_PROMPT =
   'You are a helpful assistant for Northwind Outfitters. Answer from the provided context. ' +
-  'When you use a specific source, cite it inline as [Source N], where N is the number in the source list.';
+  'When you use a specific source, cite it inline as [Source N], where N is the number in the source list.' +
+  
+  'If you cannot answer from the context, say "I don\'t know" and do not make up an answer.' +
+  'Do not cite sources that are not in the context.' +
+  'Do not invent sources or fabricate citations. Or just new text outside the context.';
 
 const DEFAULT_MAX_REGEN_RETRIES = 2;
 
@@ -119,6 +124,10 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
     });
     const stream: ChatStream = opened.stream;
 
+    // Tokens are about to flow — make the stage explicit on the wire so the
+    // frontend can leave "Selecting" and enter "Generating".
+    if (sse && !sse.isClosed()) sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.GENERATING, progress: 90 });
+
     const partial: string[] = [];
     const seen = new Set<number>();
     let citations: Citation[] = [];
@@ -192,19 +201,12 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
       user: query,
     });
 
-    if (options.trace) {
-      try {
-        sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages }));
-      } catch (err) {
-        const e = err as { message?: string };
-        logger.warn(`trace serialization failed for ${sessionId}: ${e.message}`);
-      }
-    }
-
     let partialText = '';
     let citations: Citation[] = [];
     let request: { model?: string | null; signal?: AbortSignal } | undefined;
     let attempt = 0;
+    const genT0 = Date.now();
+    let generationMs = 0;
 
     try {
       for (;;) {
@@ -232,11 +234,30 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
           sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.GENERATION, progress: 80, note: 'regenerating' });
         }
       }
+      generationMs = Date.now() - genT0;
     } catch (err) {
+      generationMs = Date.now() - genT0;
       const e = normErr(err);
       logger.error(`generation interrupted for ${sessionId}: ${e.message}`);
+      if (options.trace) {
+        try {
+          sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs }));
+        } catch (traceErr) {
+          const te = traceErr as { message?: string };
+          logger.warn(`trace serialization failed for ${sessionId}: ${te.message}`);
+        }
+      }
       sse.error({ message: 'generation interrupted', detail: e });
       return;
+    }
+
+    if (options.trace) {
+      try {
+        sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs }));
+      } catch (err) {
+        const e = err as { message?: string };
+        logger.warn(`trace serialization failed for ${sessionId}: ${e.message}`);
+      }
     }
 
     if (store && store.persistMessage) {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { isProxy, isReactive } from 'vue';
-import { createChatStore, STATUS, STAGES } from '../src/lib/chatStore';
+import { createChatStore, STATUS, STAGES, STAGE_LABELS } from '../src/lib/chatStore';
 import { parseSse } from '../src/lib/sseParser';
 import type { RawTrace } from '../src/types/trace';
 import type { SseFrame } from '../src/types/sse';
@@ -114,6 +114,31 @@ describe('chatStore — progress UI (Step 6.2)', () => {
     const store = createChatStore({ send, parser: { parseSse } });
     await store.sendMessage({ sessionId: 's1', query: 'q' });
     expect(store.state.progress).toBe(80);
+  });
+
+  it('advances to Generating when the first token arrives (Problem B)', async () => {
+    const send = makeSend([
+      [progress(1, STAGES.GENERATION, 80), token(2, 'Hello '), token(3, 'world')],
+      [done(4)],
+    ]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(store.state.stage).toBe(STAGES.GENERATING);
+    expect(store.state.answer).toBe('Hello world');
+  });
+
+  it('maps the generating stage to a human label', () => {
+    expect(STAGE_LABELS[STAGES.GENERATING]).toBe('Generating');
+  });
+
+  it('does not regress the stage to an earlier one once tokens flow (non-happy)', async () => {
+    const send = makeSend([
+      [token(1, 'Hello '), progress(2, STAGES.RETRIEVAL, 40)],
+      [done(3)],
+    ]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(store.state.stage).toBe(STAGES.GENERATING);
   });
 });
 

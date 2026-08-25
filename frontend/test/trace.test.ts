@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeTrace, describeClassification, formatScore } from '../src/lib/trace';
+import { normalizeTrace, describeClassification, formatScore, timingBars } from '../src/lib/trace';
 import type { RawTrace, TraceClassification } from '../src/types/trace';
 
 describe('describeClassification', () => {
@@ -71,5 +71,41 @@ describe('formatScore', () => {
     expect(formatScore(null)).toBe('—');
     expect(formatScore(undefined)).toBe('—');
     expect(formatScore(NaN)).toBe('—');
+  });
+});
+
+describe('timingBars', () => {
+  it('returns one row per stage plus Overhead and E2E, with ms and a width proportional to the largest', () => {
+    const bars = timingBars({ embed: 100, retrieval: 50, rerank: 25, generation: 200, total: 375, e2e: 575, overhead: 200 });
+    expect(bars.map((b) => b.label)).toEqual(['Embed', 'Retrieve', 'Rerank', 'Generate', 'Overhead', 'E2E']);
+    expect(bars.map((b) => b.ms)).toEqual([100, 50, 25, 200, 200, 575]);
+    // Largest is E2E (575ms) -> 100%; Generate is ~35%.
+    expect(bars.find((b) => b.label === 'E2E')?.pct).toBe(100);
+    expect(bars.find((b) => b.label === 'Generate')?.pct).toBe(35);
+  });
+
+  it('derives E2E from total + generation when e2e is absent', () => {
+    const bars = timingBars({ embed: 100, retrieval: 50, rerank: 25, generation: 200, total: 375 });
+    expect(bars.find((b) => b.label === 'E2E')?.ms).toBe(575);
+  });
+
+  it('derives Overhead from total minus the stages when overhead is absent', () => {
+    const bars = timingBars({ embed: 100, retrieval: 50, rerank: 25, generation: 200, total: 375 });
+    expect(bars.find((b) => b.label === 'Overhead')?.ms).toBe(200);
+  });
+
+  it('handles a missing generation timing gracefully (0-width bar, no NaN)', () => {
+    const bars = timingBars({ embed: 10, retrieval: 20, rerank: 5, total: 35 });
+    expect(bars).toHaveLength(6);
+    const gen = bars.find((b) => b.label === 'Generate');
+    expect(gen?.ms).toBe(0);
+    expect(Number.isFinite(gen?.pct)).toBe(true);
+    // E2E falls back to total when generation is absent.
+    expect(bars.find((b) => b.label === 'E2E')?.ms).toBe(35);
+  });
+
+  it('returns an empty list when timings are absent', () => {
+    expect(timingBars(null)).toEqual([]);
+    expect(timingBars(undefined)).toEqual([]);
   });
 });

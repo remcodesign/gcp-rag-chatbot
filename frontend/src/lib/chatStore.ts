@@ -31,6 +31,7 @@ export const STAGES = {
   RETRIEVAL: 'retrieval',
   RERANK: 'rerank',
   GENERATION: 'generation',
+  GENERATING: 'generating',
 } as const;
 
 /** Human labels for the progress UI (Step 6.2). */
@@ -38,6 +39,7 @@ export const STAGE_LABELS: Record<string, string> = Object.freeze({
   [STAGES.RETRIEVAL]: 'Understanding',
   [STAGES.RERANK]: 'Searching',
   [STAGES.GENERATION]: 'Selecting',
+  [STAGES.GENERATING]: 'Generating',
 });
 
 /** Client-side lifecycle states. */
@@ -97,6 +99,10 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
 
   /** Appends a token delta and merges the running citation list (Step 6.1). */
   function appendToken(payload: SseToken): void {
+    // First token -> tokens are flowing; leave "Selecting" and enter "Generating".
+    if (payload.text && state.stage !== STAGES.GENERATING) {
+      state.stage = STAGES.GENERATING;
+    }
     if (payload.text) state.answer += payload.text;
     for (const c of payload.citations ?? []) {
       if (!state.citations.some((x) => x.n === c.n)) state.citations.push(c);
@@ -105,7 +111,11 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
 
   /** Applies a progress event, never moving the indicator backward (Step 6.2). */
   function applyProgress(ev: SseProgress): void {
-    if (ev.stage) state.stage = ev.stage as ChatState['stage'];
+    // Once tokens are flowing we are "Generating" — a replayed progress frame
+    // (e.g. after a reconnect) must not regress the stage to an earlier one.
+    if (ev.stage && state.stage !== STAGES.GENERATING) {
+      state.stage = ev.stage as ChatState['stage'];
+    }
     if (typeof ev.progress === 'number' && ev.progress >= state.progress) {
       state.progress = ev.progress;
     }

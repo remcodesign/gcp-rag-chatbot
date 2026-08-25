@@ -382,4 +382,58 @@ describe('RAG trace event (POC sidebar data)', () => {
     const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
     expect(traceFrames).toHaveLength(0);
   });
+
+  it('emits a generating progress event before the first token (Problem B)', async () => {
+    const sink = makeSink();
+    const sse = createSse(sink);
+    const gen = createGenerator({
+      bridge: staticBridge(tokenStream()),
+      pipeline: stalePipeline(),
+      store: { persistMessage: async () => {} },
+    });
+    await gen.streamAnswer({ sse, sessionId: 's', query: 'q' });
+
+    const frames = parseFrames(sink.frames);
+    const genIdx = frames.findIndex((f) => f.event === 'progress' && f.data.stage === STAGES.GENERATING);
+    const firstTokenIdx = frames.findIndex((f) => f.event === 'token');
+    expect(genIdx).toBeGreaterThanOrEqual(0);
+    expect(firstTokenIdx).toBeGreaterThan(genIdx);
+  });
+
+  it('includes the generation timing in the trace payload (Problem D)', async () => {
+    const pipeline: Pipeline = {
+      run: async () => ({
+        query: 'q',
+        hits: [],
+        retrievalHits: [],
+        sourceMap: {},
+        context: '',
+        sources: [],
+        classification: { rewrite: false, reason: 'self-contained' },
+        rerankInfo: { didRerank: false, reason: 'above threshold' },
+        timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
+        timedOut: false,
+      }),
+      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+    };
+    const sink = makeSink();
+    const sse = createSse(sink);
+    const gen = createGenerator({
+      bridge: staticBridge(streamOf([{ choices: [{ delta: { content: 'answer' } }] }])),
+      pipeline,
+      store: { persistMessage: async () => {} },
+    });
+    await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: { trace: true } });
+
+    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+    expect(traceFrames).toHaveLength(1);
+    const timings = (traceFrames[0]?.data as { timings?: { generation?: number; e2e?: number; total?: number; overhead?: number } }).timings;
+    expect(timings).toBeDefined();
+    expect(typeof timings?.generation).toBe('number');
+    expect((timings?.generation ?? -1) >= 0).toBe(true);
+    // E2E = pipeline total + generation.
+    expect(timings?.e2e).toBe((timings?.total ?? 0) + (timings?.generation ?? 0));
+    // Overhead = total - (embed + retrieval + rerank).
+    expect(timings?.overhead).toBe((timings?.total ?? 0) - 10 - 20 - 5);
+  });
 });

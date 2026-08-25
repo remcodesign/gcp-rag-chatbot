@@ -53,10 +53,17 @@ export interface RerankResult {
 }
 
 export interface StageTimings {
+  /** LLM timing in (ms) */
   embed: number;
   retrieval: number;
   rerank: number;
+  generation?: number;
+  /** RAG-pipeline total (ms): classify + embed + retrieve + rerank + context build. */
   total: number;
+  /** End-to-end total (ms): pipeline `total` + LLM `generation`. */
+  e2e?: number;
+  /** Pipeline overhead (ms): `total - (embed + retrieval + rerank)` — classify + context build + scheduling. */
+  overhead?: number;
 }
 
 export interface RerankInfo {
