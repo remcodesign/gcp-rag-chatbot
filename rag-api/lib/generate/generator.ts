@@ -47,6 +47,14 @@ export const SYSTEM_PROMPT =
 
   '! Output in the Dutch language.';
 
+/** Max conversation turns (user+assistant pairs) before the session ends. */
+export const MAX_CONVERSATION_TURNS = 5;
+
+/** Friendly Dutch message shown when the conversation limit is reached. */
+export const SESSION_LIMIT_MESSAGE =
+  'Dit was de laatste vraag van dit gesprek. Bedankt voor het gesprek over je outdoor uitrusting! ' +
+  'Start gerust een nieuw gesprek als je nog een vraag hebt.';
+
 const DEFAULT_MAX_REGEN_RETRIES = 2;
 
 interface GeneratorDeps {
@@ -216,6 +224,37 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
     const options: StreamAnswerOptions = input.options ?? {};
     sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RETRIEVAL, progress: 40 });
 
+    // Load the stored transcript (older turns) + persist this user turn so a
+    // follow-up question can use it, and so messages survive a reconnect.
+    const stored = await loadMessages(store, sessionId);
+    const storedHistory = stored.map((m) => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+    }));
+    if (store && store.persistMessage) {
+      try {
+        await store.persistMessage(sessionId, { role: 'user', content: query, complete: true });
+      } catch (err) {
+        const e = err as { message?: string };
+        logger.warn(`user message persist failed for ${sessionId}: ${e.message}`);
+      }
+    }
+
+    // Enforce a friendly conversation limit: after MAX_CONVERSATION_TURNS
+    // assistant replies, end the session instead of calling the LLM.
+    const assistantTurns = storedHistory.filter((m) => m.role === 'assistant').length;
+    if (assistantTurns >= MAX_CONVERSATION_TURNS) {
+      logger.info(`conversation limit reached for ${sessionId}`);
+      if (sse && !sse.isClosed()) {
+        sse.send(SSE_EVENT.TOKEN, { text: SESSION_LIMIT_MESSAGE, citations: [] });
+        sse.send(SSE_EVENT.DONE, { sources: [], citations: [], limitReached: true });
+      }
+      sse.end();
+      return;
+    }
+
+    const history: ChatMessage[] = options.history ?? storedHistory;
+
     let runOutcome: RunOutcome = {
       query,
       sourceMap: {},
@@ -225,7 +264,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
       timedOut: false,
     };
     try {
-      runOutcome = await pipeline.run(query, { history: options.history });
+      runOutcome = await pipeline.run(query, { history });
     } catch (err) {
       const e = err as { message?: string };
       logger.warn(`retrieval failed for ${sessionId}: ${e.message}`);
@@ -251,6 +290,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
       systemPrompt: options.systemPrompt || SYSTEM_PROMPT,
       context: runOutcome.context || '',
       user: query,
+      history,
     });
 
     let partialText = '';
@@ -343,15 +383,36 @@ export function buildMessages({
   systemPrompt,
   context,
   user,
+  history = [],
 }: {
   systemPrompt: string;
   context: string;
   user: string;
+  /** Prior user/assistant turns to include so the LLM can answer follow-ups. */
+  history?: ChatMessage[];
 }): ChatMessage[] {
   const msgs: ChatMessage[] = [{ role: 'system', content: systemPrompt }];
+  // Compact the prior transcript (oldest first, role-alternating) so the LLM
+  // sees the conversation, capped to a bounded window to protect the prompt.
+  const prior = compactHistory(history);
+  for (const m of prior) msgs.push(m);
   if (context) msgs.push({ role: 'user', content: `Context:\n${context}` });
   msgs.push({ role: 'user', content: user });
   return msgs;
+}
+
+/** Keeps a bounded, alternating user/assistant transcript (oldest first). */
+export function compactHistory(history: ChatMessage[] | undefined, maxTurns = 5): ChatMessage[] {
+  if (!Array.isArray(history) || history.length === 0) return [];
+  // Keep both the user question and its assistant reply per turn -> 2 msgs/turn.
+  const bounded = history.slice(-maxTurns * 2);
+  // Collapse any consecutive same-role messages (safety, should not happen).
+  const out: ChatMessage[] = [];
+  for (const m of bounded) {
+    if (out.length && out[out.length - 1]?.role === m.role) continue;
+    out.push(m);
+  }
+  return out;
 }
 
 export function buildRegenMessages(base: ChatMessage[], partialText: string): ChatMessage[] {
@@ -364,4 +425,22 @@ export function buildRegenMessages(base: ChatMessage[], partialText: string): Ch
         'Continue from where you stopped, staying consistent with the answer above. Do not repeat what is already written.',
     },
   ];
+}
+
+/** Safely loads the stored transcript for a session (empty when no store). */
+async function loadMessages(
+  store: StateStoreLike | undefined,
+  sessionId: string,
+): Promise<Array<{ role: 'user' | 'assistant'; content: string }>> {
+  if (!store || typeof store.listMessages !== 'function') return [];
+  try {
+    const records = await store.listMessages(sessionId);
+    return (Array.isArray(records) ? records : [])
+      .map((r) => ({ role: r.role, content: r.content ?? '' }))
+      .filter((r) => typeof r.content === 'string');
+  } catch (err) {
+    const e = err as { message?: string };
+    console.warn(`listMessages failed for ${sessionId}: ${e.message}`);
+    return [];
+  }
 }

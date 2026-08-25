@@ -33,6 +33,8 @@ export interface SseToken {
 export interface SseDone {
   sources: Source[];
   citations: Citation[];
+  /** Set when the backend ended the session at the conversation limit. */
+  limitReached?: boolean;
 }
 
 /** `error` payload — a terminal stream message. */

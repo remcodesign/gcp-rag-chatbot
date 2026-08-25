@@ -53,6 +53,9 @@ export const STATUS = {
 /** Status value type derived from the `STATUS` constant. */
 export type StatusValue = (typeof STATUS)[keyof typeof STATUS];
 
+/** Max conversation turns before the backend ends the session (matches rag-api). */
+export const MAX_CONVERSATION_TURNS = 5;
+
 const DEFAULT_MAX_RETRIES = 3;
 const RETRY_BASE_MS = 500;
 
@@ -85,6 +88,8 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     error: null,
     lastEventId: null,
     retryCount: 0,
+    turnCount: 0,
+    conversationEnded: false,
   });
 
   let controller: AbortController | null = null;
@@ -131,10 +136,22 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
       case 'token':
         appendToken(frame.data as SseToken);
         break;
-      case 'done':
-        state.sources = (frame.data as SseDone).sources ?? [];
+      case 'done': {
+        const done = frame.data as SseDone;
+        state.sources = done.sources ?? [];
         state.status = 'done';
+        // The cap's "end message" is a token with no real answer -> mark ended
+        // and do NOT count it as a turn.
+        if (done.limitReached) {
+          state.conversationEnded = true;
+          break;
+        }
+        // A real assistant reply counts as one turn toward the session cap.
+        if (state.answer.trim().length > 0) {
+          state.turnCount += 1;
+        }
         break;
+      }
       case 'trace':
         state.trace = frame.data as RawTrace;
         break;
@@ -191,6 +208,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     state.error = null;
     state.retryCount = 0;
     state.lastEventId = null;
+    state.conversationEnded = false;
 
     for (;;) {
       const { ok } = await runStream();
@@ -240,6 +258,8 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     state.error = null;
     state.lastEventId = null;
     state.retryCount = 0;
+    state.turnCount = 0;
+    state.conversationEnded = false;
   }
 
   return { state, sendMessage, retry, reset };

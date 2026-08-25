@@ -26,6 +26,8 @@ const progress = (id: number, stage: string, p: number): TestFrame =>
   ({ id, event: 'progress', data: { stage, progress: p } });
 const done = (id: number, sources: unknown[] = []): TestFrame =>
   ({ id, event: 'done', data: { sources, citations: [] } });
+const doneLimit = (id: number): TestFrame =>
+  ({ id, event: 'done', data: { sources: [], citations: [], limitReached: true } });
 const err = (id: number, message: string): TestFrame =>
   ({ id, event: 'error', data: { message } });
 
@@ -264,5 +266,42 @@ describe('chatStore — RAG trace (POC sidebar)', () => {
     const store = createChatStore({ send, parser: { parseSse } }, { trace: false });
     await store.sendMessage({ sessionId: 's1', query: 'q' });
     expect(sentTrace).toBe(false);
+  });
+});
+
+describe('chatStore — conversation turns (Domain 10)', () => {
+  it('increments the turn counter for each completed assistant reply', async () => {
+    const frames = (call: number): TestFrame[] =>
+      call === 0 ? [token(2, 'Antwoord een'), done(3)] : [token(4, 'Antwoord twee'), done(5)];
+    const send = makeSend([frames(0), frames(1)]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    await store.sendMessage({ sessionId: 's1', query: 'vraag 1' });
+    expect(store.state.turnCount).toBe(1);
+    await store.sendMessage({ sessionId: 's1', query: 'vraag 2' });
+    expect(store.state.turnCount).toBe(2);
+    expect(store.state.conversationEnded).toBe(false);
+  });
+
+  it('marks the conversation ended (and does not count a turn) on a limitReached done', async () => {
+    const frames = (call: number): TestFrame[] =>
+      call === 0 ? [token(2, 'Laatste antwoord'), done(3)] : [doneLimit(4)];
+    const send = makeSend([frames(0), frames(1)]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    await store.sendMessage({ sessionId: 's1', query: 'vraag' });
+    expect(store.state.turnCount).toBe(1);
+    await store.sendMessage({ sessionId: 's1', query: 'nog een' });
+    expect(store.state.conversationEnded).toBe(true);
+    // The end message is not a real turn.
+    expect(store.state.turnCount).toBe(1);
+  });
+
+  it('resets the turn counter and ended flag on reset', async () => {
+    const send = makeSend([[token(2, 'hi'), done(3)]]);
+    const store = createChatStore({ send, parser: { parseSse } });
+    await store.sendMessage({ sessionId: 's1', query: 'q' });
+    expect(store.state.turnCount).toBe(1);
+    store.reset();
+    expect(store.state.turnCount).toBe(0);
+    expect(store.state.conversationEnded).toBe(false);
   });
 });

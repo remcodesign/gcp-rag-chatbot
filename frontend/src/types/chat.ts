@@ -59,6 +59,10 @@ export interface ChatState {
   error: ChatError | null;
   lastEventId: number | null;
   retryCount: number;
+  /** Number of completed assistant turns in this conversation (X in "X / 5"). */
+  turnCount: number;
+  /** Whether the conversation limit was reached (server sent the end message). */
+  conversationEnded: boolean;
 }
 
 /** Shape returned by the store factory. */

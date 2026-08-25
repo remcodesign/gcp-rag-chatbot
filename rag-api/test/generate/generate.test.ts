@@ -12,7 +12,7 @@ import {
   SYSTEM_PROMPT,
 } from '../../lib/generate/generator.js';
 import type { Pipeline, SourceMap } from '../../lib/types/rag.js';
-import type { ChatStreamChunk, ChatStream } from '../../lib/types/chat.js';
+import type { ChatMessage, ChatStreamChunk, ChatStream } from '../../lib/types/chat.js';
 
 /** A recording response sink standing in for a Node `ServerResponse`. */
 interface Sink {
@@ -500,5 +500,82 @@ describe('RAG trace event (POC sidebar data)', () => {
     expect(typeof data.ttftMs).toBe('number');
     expect(data.ttftMs ?? -1).toBeGreaterThanOrEqual(0);
     expect(data.tokensPerSecond).toBeGreaterThan(0);
+  });
+
+  it('persists the user message and feeds prior turns into the prompt (history)', async () => {
+    const persisted: Array<{ role: string; content: string; complete: boolean }> = [];
+    const store = {
+      listMessages: async () => [
+        { id: 'm1', role: 'user', content: 'Hoe werken retouren?', sources: [], complete: true, createdAt: 1, updatedAt: 1 },
+        { id: 'm2', role: 'assistant', content: 'Binnen 30 dagen.', sources: [], complete: true, createdAt: 2, updatedAt: 2 },
+      ],
+      persistMessage: async (_sid: string, m: { role: string; content: string; complete: boolean }) => { persisted.push(m); },
+    };
+    let seenMessages: ChatMessage[] = [];
+    const pipeline: Pipeline = {
+      run: async (q, opts) => { seenMessages = opts?.history ?? []; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: 'ctx', sources: [], timedOut: false }; },
+      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+    };
+    const sink = makeSink();
+    const sse = createSse(sink);
+    const gen = createGenerator({
+      bridge: staticBridge(tokenStream()),
+      pipeline,
+      store: store as never,
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+    await gen.streamAnswer({ sse, sessionId: 's', query: 'En de wachtrij?', options: { trace: true } });
+
+    // The user turn was persisted (the assistant turn is persisted separately).
+    const userPersisted = persisted.filter((m) => m.role === 'user');
+    expect(userPersisted).toHaveLength(1);
+    expect(userPersisted[0]?.content).toBe('En de wachtrij?');
+    expect(userPersisted[0]?.complete).toBe(true);
+    expect(persisted.some((m) => m.role === 'assistant')).toBe(true);
+    // Prior turns forwarded to the pipeline for classification/history.
+    expect(seenMessages.map((m) => m.content)).toEqual(['Hoe werken retouren?', 'Binnen 30 dagen.']);
+    // The LLM prompt includes the prior turns (via buildMessages) before the new query.
+    const traceFrame = parseFrames(sink.frames).find((f) => f.event === 'trace');
+    const finalPrompt = (traceFrame?.data as { finalPrompt?: string[] })?.finalPrompt?.join('\n') ?? '';
+    expect(finalPrompt).toContain('Hoe werken retouren?');
+    expect(finalPrompt).toContain('Binnen 30 dagen.');
+    expect(finalPrompt).toContain('En de wachtrij?');
+  });
+
+  it('ends the session with a friendly Dutch message when the turn cap is reached', async () => {
+    const store = {
+      listMessages: async () =>
+        // 5 full turns: user + assistant, repeated 5x -> 5 assistant replies.
+        Array.from({ length: 10 }, (_, i) => ({
+          id: `m${i}`, role: i % 2 === 0 ? 'user' : 'assistant', content: `turn ${i}`, sources: [], complete: true, createdAt: i, updatedAt: i,
+        })),
+      persistMessage: async () => {},
+    };
+    const called = { pipeline: 0, bridge: 0 };
+    const pipeline: Pipeline = {
+      run: async (q) => { called.pipeline += 1; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: '', sources: [], timedOut: false }; },
+      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+    };
+    const sink = makeSink();
+    const sse = createSse(sink);
+    const gen = createGenerator({
+      bridge: { ...staticBridge(tokenStream()), streamReply: async () => { called.bridge += 1; return { requestId: 'r', model: 'm', stream: tokenStream() }; } },
+      pipeline,
+      store: store as never,
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+    });
+    await gen.streamAnswer({ sse, sessionId: 's', query: 'Nog een vraag' });
+
+    // No LLM call happened.
+    expect(called.pipeline).toBe(0);
+    expect(called.bridge).toBe(0);
+    // A token carried the Dutch end message, then done.
+    const tokenFrame = parseFrames(sink.frames).find((f) => f.event === 'token');
+    const text = (tokenFrame?.data as { text?: string })?.text ?? '';
+    expect(text.length).toBeGreaterThan(0);
+    expect(text).not.toContain('I don\'t know');
+    // Dutch end message present.
+    expect(/[a-zA-Z]{4,}/.test(text)).toBe(true);
+    expect(parseFrames(sink.frames).some((f) => f.event === 'done')).toBe(true);
   });
 });

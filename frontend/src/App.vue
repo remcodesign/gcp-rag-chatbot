@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { createChatStore, STATUS } from './lib/chatStore';
+import { createChatStore, STATUS, MAX_CONVERSATION_TURNS } from './lib/chatStore';
 import { STAGE_LABELS } from './lib/chatStore';
 import { openSseStream } from './lib/sseTransport';
 import { renderAnswer, buildSourceChips } from './lib/citations';
@@ -43,6 +43,15 @@ const isStreaming = computed(() => status.value === STATUS.STREAMING);
 const isError = computed(() => status.value === STATUS.ERROR);
 const isGenerating = computed(() => store.state.stage === 'generating');
 const timingRows = computed(() => timingBars(trace.value?.timings ?? null));
+
+/** Completed turns in this conversation (X in "X / 5"). */
+const turnCount = computed(() => store.state.turnCount);
+/** Whether the backend ended the session at the conversation limit. */
+const conversationEnded = computed(() => store.state.conversationEnded);
+/** Whether the user can still ask a question (below the cap and not ended). */
+const canAsk = computed(() =>
+  !conversationEnded.value && turnCount.value < MAX_CONVERSATION_TURNS,
+);
 
 /** Whether any token-usage / token-speed data is available to render. */
 const hasUsage = computed(() => {
@@ -161,6 +170,11 @@ function newSession(): void {
       <header class="flex items-center justify-between">
         <h1 class="m-0 text-xl">Northwind Outfitters — Support Chat</h1>
         <div class="flex items-center gap-2">
+          <span
+            class="rounded-full border border-(--border) px-3 py-1.5 text-[13px]"
+            :class="canAsk ? 'text-(--muted)' : 'text-(--danger)'"
+            :title="'Vragen in dit gesprek: ' + turnCount + ' van ' + MAX_CONVERSATION_TURNS"
+          >{{ turnCount }} / {{ MAX_CONVERSATION_TURNS }}</span>
           <button
             class="cursor-pointer rounded-lg border border-(--border) px-3 py-1.5 text-(--text)"
             @click="showTracePanel = !showTracePanel"
@@ -190,6 +204,13 @@ function newSession(): void {
             :style="isGenerating ? undefined : { width: progress + '%' }"
           ></span>
         </span>
+      </div>
+
+      <!-- Conversation limit banner (Domain 10) -->
+      <div v-if="conversationEnded" class="flex items-center justify-between gap-3 rounded-lg border border-(--accent) bg-(--accent-soft) px-4 py-3 text-(--text)">
+        <p class="m-0 text-[13px]">
+          Dit gesprek is afgelopen. Start een <button class="cursor-pointer border-none bg-transparent p-0 text-[13px] font-semibold text-(--accent) hover:underline" type="button" @click="newSession">nieuw gesprek</button> om verder te gaan.
+        </p>
       </div>
 
       <!-- Error banner (Step 6.1 non-happy) -->
@@ -238,15 +259,15 @@ function newSession(): void {
         <input
           v-model="input"
           type="text"
-          placeholder="Ask a question…"
-          :disabled="isStreaming"
+          :placeholder="canAsk ? 'Ask a question…' : 'Start een nieuw gesprek om verder te vragen'"
+          :disabled="isStreaming || !canAsk"
           autocomplete="off"
           class="flex-1 rounded-[10px] border border-(--border) bg-(--panel) px-3.5 py-3 text-[15px] shadow-[0_1px_2px_rgba(16,24,40,0.06),0_4px_10px_rgba(16,24,40,0.05)] placeholder:text-(--muted)"
         />
         <button
           type="submit"
           class="cursor-pointer rounded-[10px] bg-(--accent) px-5 text-white disabled:cursor-default disabled:opacity-50"
-          :disabled="isStreaming || !input.trim()"
+          :disabled="isStreaming || !input.trim() || !canAsk"
         >Send</button>
       </form>
     </div>
@@ -266,6 +287,14 @@ function newSession(): void {
           >×</button>
         </div>
         <div class="no-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
+          <div
+            class="mb-4 rounded-lg border border-(--border) px-3 py-2.5 text-[12px]"
+            :class="canAsk ? 'text-(--muted)' : 'border-(--danger) text-(--danger)'"
+          >
+            Gesprek: {{ turnCount }} / {{ MAX_CONVERSATION_TURNS }}
+            <span v-if="conversationEnded"> — klaar, start een nieuw gesprek.</span>
+          </div>
+
           <p v-if="!trace" class="text-[14px] text-(--muted)">
             No RAG trace yet — ask a question to see retrieval, rerank, context and the final prompt.
           </p>
