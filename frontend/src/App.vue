@@ -5,8 +5,10 @@ import { STAGE_LABELS } from './lib/chatStore';
 import { openSseStream } from './lib/sseTransport';
 import { renderAnswer } from './lib/citations';
 import { resolveApiBase, resolveTraceEnabled } from './lib/config';
-import { normalizeTrace, formatScore, formatTokensPerSecond, formatCost, timingBars } from './lib/trace';
+import { normalizeTrace, formatScore, timingBars } from './lib/trace';
 import { SAMPLE_GROUPS } from './lib/sampleQuestions';
+import TraceSidebar from './components/TraceSidebar.vue';
+import TimingsModal from './components/TimingsModal.vue';
 import type { Source } from './types/sse';
 import type { TraceHit } from './types/trace';
 
@@ -114,31 +116,6 @@ const errorDetailText = computed(() => describeDetail(errorDetail.value));
 // the E2E total on top, and below it the per-stage timings stacked so they
 // (ideally) sum to E2E. Same bar width; the stack visually "fills" E2E.
 const showTimingsModal = ref(false);
-/** Stable color per timing row label (used for the stacked bar + legend). */
-const TIMING_COLORS: Record<string, string> = {
-  Embed: 'var(--accent)',
-  Retrieve: '#38bdf8',
-  Rerank: '#a78bfa',
-  Generate: '#34d399',
-  E2E: '#f87171',
-};
-function timingColor(label: string): string {
-  return TIMING_COLORS[label] ?? 'var(--accent)';
-}
-/** The stage rows (everything except E2E), for the stacked breakdown bar. */
-const stageRows = computed(() => timingRows.value.filter((r) => r.label !== 'E2E'));
-/** The E2E row, if present. */
-const e2eRow = computed(() => timingRows.value.find((r) => r.label === 'E2E') ?? null);
-/** Sum of the stage timings (Embed + Retrieve + Rerank + Generate). */
-const stageMsTotal = computed(() =>
-  stageRows.value.reduce((acc, r) => acc + r.ms, 0),
-);
-/** Width of a stage segment as a % of the summed stages (so the stack fills 100%). */
-function stagePct(ms: number): number {
-  const total = stageMsTotal.value;
-  if (!total) return 0;
-  return (ms / total) * 100;
-}
 
 // --- Chunk modal (POC) ------------------------------------------------
 // Opening a source chip / trace hit shows the chunk text in a modal instead of
@@ -337,155 +314,25 @@ function newSession(): void {
       </form>
     </div>
 
+
+
+
     <Transition name="drawer">
-      <aside
+      <TraceSidebar
         v-if="showTracePanel"
-        class="trace-panel fixed bottom-[84px] right-0 top-0 z-30 flex w-[min(380px,92vw)] flex-col border-l border-(--border) bg-(--panel) shadow-[_-6px_0_24px_rgba(0,0,0,0.12)] lg:static lg:h-full lg:w-[340px] lg:shrink-0 lg:rounded-xl lg:border lg:bg-(--panel) lg:shadow-none"
-        aria-label="RAG trace details"
-      >
-        <div class="flex flex-none items-center justify-between border-b border-(--border) px-4 py-3.5">
-          <h2 class="m-0 text-[15px] font-bold">RAG trace</h2>
-          <button
-            class="cursor-pointer border-none bg-transparent text-[22px] leading-none text-(--muted) hover:text-(--text)"
-            @click="showTracePanel = false"
-            aria-label="Close RAG trace"
-          >×</button>
-        </div>
-        <div class="no-scrollbar min-h-0 flex-1 overflow-y-auto p-4">
-          <div
-            class="mb-4 rounded-lg border border-(--border) px-3 py-2.5 text-[12px]"
-            :class="canAsk ? 'text-(--muted)' : 'border-(--danger) text-(--danger)'"
-          >
-            Gesprek: {{ turnCount }} / {{ MAX_CONVERSATION_TURNS }}
-            <span v-if="conversationEnded"> — klaar, start een nieuw gesprek.</span>
-          </div>
-
-          <p v-if="!trace" class="text-[14px] text-(--muted)">
-            No RAG trace yet — ask a question to see retrieval, rerank, context and the final prompt.
-          </p>
-
-          <template v-else>
-            <section v-if="trace.error" class="mb-4 rounded-lg border border-(--danger) bg-(--danger-soft) px-3 py-2.5 text-[12px] text-(--danger)" role="alert">
-              Retrieval failed — answering without context. {{ trace.error.message }}
-            </section>
-
-            <div class="mb-6">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Query</h3>
-              <p class="m-0 mb-1 text-[14px] font-semibold">{{ trace.query }}</p>
-              <p class="my-0.5 text-[12px] text-(--muted)">Classification: {{ trace.classification }}</p>
-            </div>
-
-
-               <div class="mb-6">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Rerank</h3>
-              <p class="my-0.5 text-[12px] text-(--muted)">
-                {{ trace.rerank.didRerank ? 'Reranked' : 'Skipped rerank' }} — {{ trace.rerank.reason }}
-              </p>
-            </div>
-
-           
-            
-            <div class="mb-6">
-              <div class="mb-1.5 flex items-center justify-between">
-                <h3 class="m-0 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Timings</h3>
-                <button
-                  v-if="timingRows.length"
-                  class="cursor-pointer rounded border border-(--border) px-2 py-0.5 text-[11px] text-(--muted) hover:text-(--text)"
-                  type="button"
-                  @click="showTimingsModal = true"
-                >Graph</button>
-              </div>
-              <div v-if="timingRows.length" class="mt-2 flex flex-col gap-1.5">
-                <div
-                  v-for="row in timingRows"
-                  :key="row.label"
-                  class="flex items-center gap-2 text-[11px]"
-                >
-                  <span class="w-14 shrink-0 text-(--muted)">{{ row.label }}</span>
-                  <span class="h-2 flex-1 overflow-hidden rounded-full bg-(--border)">
-                    <span
-                      class="block h-full rounded-full"
-                      :style="{ width: row.pct + '%', background: timingColor(row.label) }"
-                    ></span>
-                  </span>
-                  <span class="w-14 shrink-0 text-right font-semibold text-(--text)">{{ row.ms }}ms</span>
-                </div>
-              </div>
-            </div>
-
-            <div v-if="hasUsage" class="mb-6">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Token usage</h3>
-              <div class="mt-2 flex flex-col gap-1.5">
-                <div v-if="trace.usage?.promptTokens != null" class="flex items-center gap-2 text-[11px]">
-                  <span class="w-14 shrink-0 text-(--muted)">Prompt</span>
-                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.usage.promptTokens }} tok</span>
-                </div>
-                <div v-if="trace.usage?.completionTokens != null" class="flex items-center gap-2 text-[11px]">
-                  <span class="w-14 shrink-0 text-(--muted)">Output</span>
-                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.usage.completionTokens }} tok</span>
-                </div>
-                <div v-if="trace.usage?.totalTokens != null" class="flex items-center gap-2 text-[11px]">
-                  <span class="w-14 shrink-0 text-(--muted)">Total</span>
-                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.usage.totalTokens }} tok</span>
-                </div>
-                <div v-if="trace.ttftMs != null" class="flex items-center gap-2 text-[11px]">
-                  <span class="w-14 shrink-0 text-(--muted)">TTFT</span>
-                  <span class="text-[11px] font-semibold text-(--text)">{{ trace.ttftMs }}ms</span>
-                </div>
-                <div class="flex items-center gap-2 text-[11px]">
-                  <span class="w-14 shrink-0 text-(--muted)">Speed</span>
-                  <span class="text-[11px] font-semibold text-(--text)">{{ formatTokensPerSecond(trace.tokensPerSecond) }}</span>
-                </div>
-                <div v-if="trace.usage?.cost != null" class="flex items-center gap-2 text-[11px]">
-                  <span class="w-14 shrink-0 text-(--muted)">Cost</span>
-                  <span class="text-[11px] font-semibold text-(--text)">{{ formatCost(trace.usage.cost) }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div class="mb-6">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Retrieval ({{ trace.retrieved.length }})</h3>
-              <ul class="m-0 flex list-none flex-col gap-2 p-0">
-                <li
-                  v-for="c in trace.retrieved"
-                  :key="c.id"
-                  class="rounded-lg border border-(--border) px-2.5 py-2"
-                  :class="{ 'opacity-55': !c.keptInContext }"
-                >
-                  <div class="flex items-center gap-2">
-                    <span class="rounded bg-(--accent-soft) px-1.5 text-[11px] font-bold text-(--accent)">#{{ c.rank }}</span>
-                    <button
-                      class="min-w-0 flex-1 cursor-pointer bg-transparent p-0 text-left text-[13px] font-semibold text-(--text) hover:text-(--accent) hover:underline"
-                      type="button"
-                      @click="openChunk(c)"
-                    >{{ c.title }}</button>
-                    <span class="text-[12px] font-semibold text-(--muted)">{{ formatScore(c.score) }}</span>
-                  </div>
-                  <div class="my-0.5 text-[11px] text-(--muted)">
-                    {{ c.chars }} chars · {{ c.keptInContext ? 'in context' : 'dropped' }}
-                  </div>
-                  <p class="m-0 mt-1 text-[12px] leading-[1.45] whitespace-pre-wrap text-[#3b4757]">{{ c.textPreview }}</p>
-                </li>
-              </ul>
-            </div>
-
-          
-
-            <div class="mb-6">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Context passed to LLM ({{ trace.context.sources.length }})</h3>
-              <ol class="m-0 pl-4 text-[12px] text-(--muted)">
-                <li v-for="s in trace.context.sources" :key="s.id" class="my-0.5">{{ s.id }}</li>
-              </ol>
-            </div>
-
-            <div v-if="trace.finalPrompt" class="mb-4">
-              <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Final prompt</h3>
-              <pre class="no-scrollbar m-0 max-h-120 overflow-y-auto whitespace-pre-wrap rounded-lg border border-(--border) bg-(--bg) px-2.5 py-2.5 text-[11px] text-(--text)">{{ trace.finalPrompt }}</pre>
-            </div>
-          </template>
-        </div>
-      </aside>
+        :trace="trace"
+        :can-ask="canAsk"
+        :turn-count="turnCount"
+        :conversation-ended="conversationEnded"
+        :timing-rows="timingRows"
+        :has-usage="hasUsage"
+        @close="showTracePanel = false"
+        @open-chunk="openChunk"
+        @open-timings="showTimingsModal = true"
+      />
     </Transition>
+
+
 
     <!-- Chunk modal (POC): shows the full source chunk when a chip/hit is clicked -->
     <Teleport to="body">
@@ -523,80 +370,15 @@ function newSession(): void {
       </div>
     </Teleport>
 
+
+
+
     <!-- Timings modal (POC): vertical bar graph of the per-stage timings -->
-    <Teleport to="body">
-      <div
-        v-if="showTimingsModal"
-        class="fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(15,23,42,0.5)] p-6"
-        @click.self="showTimingsModal = false"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Timings graph"
-      >
-        <div class="flex max-h-[82vh] w-[min(520px,100%)] flex-col overflow-hidden rounded-xl bg-(--panel) shadow-[0_20px_60px_rgba(0,0,0,0.25)]">
-          <div class="flex flex-none items-center justify-between border-b border-(--border) px-4.5 py-3.5">
-            <h2 class="m-0 text-[16px] font-bold">Timings</h2>
-            <button
-              class="cursor-pointer border-none bg-transparent text-2xl leading-none text-(--muted) hover:text-(--text)"
-              type="button"
-              @click="showTimingsModal = false"
-              aria-label="Close"
-            >×</button>
-          </div>
-          <div class="no-scrollbar overflow-y-auto p-5">
-            <p class="m-0 mb-4 text-[12px] text-(--muted)">
-              E2E time from request to last token; below it, the per-stage
-              breakdown stacked so it should sum to E2E.
-            </p>
-
-            <!-- E2E bar -->
-            <div class="mb-6">
-              <div class="mb-1 flex items-center justify-between text-[11px]">
-                <span class="font-semibold text-(--text)">E2E</span>
-                <span class="font-semibold text-(--text)">{{ e2eRow ? e2eRow.ms : '—' }}ms</span>
-              </div>
-              <div class="h-5 overflow-hidden rounded-full bg-(--border)">
-                <div
-                  class="h-full w-full rounded-full"
-                  :style="{ background: timingColor('E2E') }"
-                ></div>
-              </div>
-            </div>
-
-            <!-- Stacked per-stage bar -->
-            <div>
-              <div class="mb-1 flex items-center justify-between text-[11px]">
-                <span class="font-semibold text-(--text)">Breakdown</span>
-                <span class="font-semibold text-(--text)">{{ stageMsTotal }}ms</span>
-              </div>
-              <div class="flex h-5 w-full overflow-hidden rounded-full bg-(--border)">
-                <div
-                  v-for="row in stageRows"
-                  :key="row.label"
-                  :style="{
-                    width: stagePct(row.ms) + '%',
-                    background: timingColor(row.label),
-                  }"
-                  :title="`${row.label}: ${row.ms}ms`"
-                ></div>
-              </div>
-            </div>
-
-            <!-- Legend -->
-            <div class="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
-              <span
-                v-for="row in stageRows"
-                :key="row.label"
-                class="flex items-center gap-1.5 text-[11px] text-(--muted)"
-              >
-                <span class="inline-block h-2.5 w-2.5 rounded-sm" :style="{ background: timingColor(row.label) }"></span>
-                {{ row.label }} · {{ row.ms }}ms
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <TimingsModal
+      :show="showTimingsModal"
+      :timing-rows="timingRows"
+      @close="showTimingsModal = false"
+    />
 
     <!-- Sample questions modal (POC): grouped quick-starts from the corpus -->
     <Teleport to="body">

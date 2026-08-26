@@ -24,7 +24,7 @@ export interface SampleGroup {
 const PRODUCTS: SampleQuestion[] = [
   { text: '> Geef me outdoor slaapzak comfort advies?' },
   { text: 'Wat is de comforttemperatuur van de Nachtenbloem slaapzak?' },
-  { text: 'Hoe zet ik de trekking tent het snelst op?' },
+  // { text: 'Hoe zet ik de trekking tent het snelst op?' },
   { text: 'Is de wandelrugzak waterdicht en klikt het op het frame?' },
   { text: 'Hoe onderhoud ik mijn wandelschoenen na een modderige tocht?' },
   { text: 'Wat is de maximale draaglast van de kampeerstoel?' },
@@ -50,12 +50,12 @@ const LOYALTY: SampleQuestion[] = [
   { text: 'Hoe verzamel ik punten met het beloningsprogramma?' },
   { text: 'Kan een cadeaubon worden ingewisseld tegen contant geld?' },
   { text: 'Hoe verlopen cadeaubonnen en hun geldigheid?' },
-  { text: 'Welke maat moet ik kiezen volgens de maattabel?' },
+  // { text: 'Welke maat moet ik kiezen volgens de maattabel?' },
   { text: 'Wat kan ik met mijn punten doen?' },
 ];
 
 const SUPPORT: SampleQuestion[] = [
-  { text: 'Mijn slaapzak is onderweg verloren gegaan, wat nu?' },
+  // { text: 'Mijn slaapzak is onderweg verloren gegaan, wat nu?' },
   { text: 'De ritssluiting van mijn tent is kapot, fix of vervang?' },
   { text: 'Mijn tent is beschadigd tijdens de vakantie, gedekt door garantie?' },
   { text: 'Hoe dien ik een schadeclaim in voor een product?' },

@@ -109,3 +109,23 @@ export function timingBars(timings: TraceTimings | null | undefined): TimingBar[
     pct: Math.round((r.ms / max) * 100),
   }));
 }
+
+/** Stable color per timing row label (used for the stacked bar + legend). */
+const TIMING_COLORS: Record<string, string> = {
+  Embed: 'var(--accent)',
+  Retrieve: '#38bdf8',
+  Rerank: '#a78bfa',
+  Generate: '#34d399',
+  E2E: '#f87171',
+};
+
+/**
+ * Resolves the stable color for a timing row label, falling back to the accent
+ * token for any unknown label.
+ *
+ * @param label the timing row label (e.g. `Embed`, `E2E`).
+ * @returns a CSS color value.
+ */
+export function timingColor(label: string): string {
+  return TIMING_COLORS[label] ?? 'var(--accent)';
+}

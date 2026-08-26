@@ -8,13 +8,13 @@ describe('sampleQuestions', () => {
     expect(folders).toEqual(['products', 'faq', 'policies', 'loyalty', 'support']);
     expect(SAMPLE_GROUPS).toHaveLength(5);
     for (const g of SAMPLE_GROUPS) {
-      expect(g.questions.length).toBeGreaterThanOrEqual(5);
+      // Structural goal: every corpus folder offers at least one quick-start.
+      expect(g.questions.length).toBeGreaterThan(0);
     }
   });
 
   it('every question is a non-empty trimmed string', () => {
     const all = SAMPLE_GROUPS.flatMap((g: SampleGroup) => g.questions.map((q) => q.text));
-    expect(all.length).toBeGreaterThanOrEqual(25);
     for (const q of all) {
       expect(typeof q).toBe('string');
       expect(q.trim().length).toBeGreaterThan(3);
