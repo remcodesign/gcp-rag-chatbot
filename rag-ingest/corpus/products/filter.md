@@ -3,6 +3,7 @@ id: products-source-filter-01
 category: product
 title: "Bronwaterfilter"
 url: /producten/bronwaterfilter
+tags: waterfilter, filter, drinkwater, water, zuiveren, beek, bron
 ---
 
 ### Het Bronwaterfilter

@@ -3,6 +3,7 @@ id: products-tent-01
 category: product
 title: "Glacierraam 2 tent opzetten"
 url: /producten/glacierraam-2
+tags: tent, kamperen, opzetten, binnentent, buitentent, camping
 ---
 
 ### Het opzetten van de Glacierraam 2

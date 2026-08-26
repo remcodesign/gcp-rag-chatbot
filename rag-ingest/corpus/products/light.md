@@ -3,6 +3,7 @@ id: products-northstar-headlamp-01
 category: product
 title: "Poolster hoofdlamp"
 url: /producten/poolster-hoofdlamp
+tags: hoofdlamp, koplamp, lamp, verlichting, zaklamp, headlamp, licht
 ---
 
 ### De Poolster hoofdlamp

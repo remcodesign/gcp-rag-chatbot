@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
-import { parseSource } from '../lib/frontmatter.js';
+import { parseSource, parseTags } from '../lib/frontmatter.js';
 import { chunkText, hashText } from '../lib/chunker.js';
 import { readManifest, checkSeedNeeded, writeManifest } from '../lib/manifest.js';
 import { runSeed, CURRENT_VERSION } from '../lib/orchestrate.js';
+import { writeTextFields, embedTextForChunk } from '../lib/seeder.js';
 import type { Embedder } from '../lib/types/embedder.js';
-import type { ManifestSummary } from '../lib/types/corpus.js';
+import type { ManifestSummary, Chunk } from '../lib/types/corpus.js';
 import { createFakeFirestore } from './fakes/fakeFirestore.js';
 
 const SAMPLE = `---
@@ -13,6 +14,7 @@ id: faq-returns-01
 category: faq
 title: "Return policy"
 url: /help/returns
+tags: retouren, retour, terugbetaling, ruilen
 ---
 
 ### How long do I have to return an item?
@@ -40,7 +42,26 @@ describe('Step 4.1 — source corpus (front-matter parsing)', () => {
       title: 'Return policy',
       url: '/help/returns',
     });
-    if (r.ok) expect(r.body).toContain('How long do I have to return');
+    if (r.ok) {
+      expect(r.body).toContain('How long do I have to return');
+      // Option B: tags parsed into the source and carried to chunks.
+      expect(r.tags).toEqual(['retouren', 'retour', 'terugbetaling', 'ruilen']);
+    }
+  });
+
+  it('parses an optional tags key and defaults to empty when absent', () => {
+    expect(parseTags('hoofdlamp, koplamp,  lamp ,, verlichting')).toEqual([
+      'hoofdlamp', 'koplamp', 'lamp', 'verlichting',
+    ]);
+    expect(parseTags(undefined)).toEqual([]);
+    expect(parseTags('')).toEqual([]);
+  });
+
+  it('returns empty tags when no tags front-matter is present', () => {
+    const noTags = '---\nid: x\ncategory: faq\ntitle: "T"\nurl: /x\n---\nbody';
+    const r = parseSource(noTags);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.tags).toEqual([]);
   });
 
   it('skips a file with a missing required key and reports the reason', () => {
@@ -117,7 +138,46 @@ describe('Step 4.4 — write Location 1 then embed + Location 2', () => {
     if (chunkDoc) {
       expect(chunkDoc.text).toBeDefined();
       expect(chunkDoc.embedding).toBeDefined();
+      // Option B: tags are stored on the Firestore chunk doc.
+      expect(chunkDoc.tags).toEqual(['retouren', 'retour', 'terugbetaling', 'ruilen']);
     }
+  });
+
+  it('prepends tags to the embedded text so every chunk carries the synonyms', () => {
+    const chunk: Chunk = {
+      index: 0,
+      id: 'abc',
+      sourceId: 's1',
+      category: 'product',
+      title: 'T',
+      url: '/t',
+      tags: ['hoofdlamp', 'koplamp'],
+      text: 'De Poolster is een koplamp.',
+    };
+    // The injected embedder receives the enriched text (tags + body).
+    const embedded = embedTextForChunk(chunk);
+    expect(embedded).toContain('hoofdlamp, koplamp');
+    expect(embedded).toContain('De Poolster is een koplamp.');
+    // Without tags, the text is unchanged (no bogus prefix).
+    expect(embedTextForChunk({ ...chunk, tags: [] })).toBe('De Poolster is een koplamp.');
+  });
+
+  it('writes the stored text unchanged (no tag prefix) — citations stay intact', async () => {
+    const fs = createFakeFirestore();
+    await writeTextFields(fs, [{
+      index: 0,
+      id: 'abc',
+      sourceId: 's1',
+      category: 'product',
+      title: 'T',
+      url: '/t',
+      tags: ['hoofdlamp'],
+      text: 'De Poolster is een koplamp.',
+    }]);
+    const doc = fs.store.get('chunks\u0000abc');
+    // The stored `text` is the pure body, NOT the tag-prefixed embed input.
+    expect(doc?.text).toBe('De Poolster is een koplamp.');
+    expect(doc?.tags).toEqual(['hoofdlamp']);
   });
 
   it('handles an embedding retry then succeeds (job continues)', async () => {

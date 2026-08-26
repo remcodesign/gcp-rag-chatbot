@@ -3,6 +3,7 @@ id: products-chair-01
 category: product
 title: "Comfortstop vouwstoel"
 url: /producten/comfortstop
+tags: vouwstoel, stoel, kampeerstoel, zitten, campingstoel
 ---
 
 ### De Comfortstop opvouwen

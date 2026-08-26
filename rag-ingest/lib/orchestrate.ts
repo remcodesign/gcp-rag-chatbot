@@ -19,7 +19,7 @@ import type { Embedder } from './types/embedder.js';
 import type { Source, Chunk, SkippedSource, SeedResult } from './types/corpus.js';
 
 /** Bumped whenever the corpus content or embedding contract changes. */
-export const CURRENT_VERSION = '10';
+export const CURRENT_VERSION = '11';
 
 export interface RunSeedDeps {
   firestore: Firestore;
@@ -73,6 +73,7 @@ export async function runSeed(deps: RunSeedDeps, options: RunSeedOptions = {}): 
       category: parsed.category,
       title: parsed.title,
       url: parsed.url,
+      tags: parsed.tags,
     }));
     allChunks.push(...chunks);
   }

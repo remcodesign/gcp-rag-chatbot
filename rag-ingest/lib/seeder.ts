@@ -30,7 +30,7 @@ type EmbedError = Error & { code?: string };
 /**
  * Writes the text/metadata half of a chunk (Location 1).
  * @param firestore Firestore-shaped backend.
- * @param chunks    each chunk carries `{ id, text, title, url, sourceId, category, index }`.
+ * @param chunks    each chunk carries `{ id, text, title, url, sourceId, category, index, tags }`.
  */
 export async function writeTextFields(firestore: Firestore, chunks: Chunk[]): Promise<void> {
   const batch = firestore.batch();
@@ -42,15 +42,28 @@ export async function writeTextFields(firestore: Firestore, chunks: Chunk[]): Pr
       url: chunk.url,
       index: chunk.index,
       text: chunk.text,
+      tags: chunk.tags,
     }, { merge: true });
   }
   await batch.commit();
 }
 
 /**
+ * Builds the text actually embedded for a chunk: the source tags (synonyms)
+ * prepended to the body text. Prepending to EVERY chunk means the synonym
+ * signal reaches every vector of a source, not just the first chunk. The
+ * stored `text` field stays the original body so citations/answers are
+ * unchanged — only the embed input is enriched.
+ */
+export function embedTextForChunk(chunk: Chunk): string {
+  const tags = Array.isArray(chunk.tags) && chunk.tags.length > 0 ? chunk.tags.join(', ') : '';
+  return tags ? `${tags}. ${chunk.text}` : chunk.text;
+}
+
+/**
  * Embeds a batch of texts and merges the vector field (Location 2).
  * @param firestore   Firestore-shaped backend.
- * @param chunks      each with `id` and `text`.
+ * @param chunks      each with `id` and `text` (+ optional `tags`).
  * @param embeddings  adapter with `embed(texts) -> Array<number[]>`.
  * @param opts        `{ maxRetries = 3, retryBaseMs = 50 }` 429/5xx backoff per batch.
  * @returns number of vectors written.
@@ -63,7 +76,11 @@ export async function writeVectors(
 ): Promise<number> {
   const maxRetries = opts.maxRetries ?? 3;
   const retryBaseMs = opts.retryBaseMs ?? 50;
-  const vectors = await embedWithRetry(chunks.map((c) => c.text), embeddings, { maxRetries, retryBaseMs });
+  const vectors = await embedWithRetry(
+    chunks.map((c) => embedTextForChunk(c)),
+    embeddings,
+    { maxRetries, retryBaseMs },
+  );
 
   const batch = firestore.batch();
   chunks.forEach((chunk, i) => {

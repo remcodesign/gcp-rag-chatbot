@@ -3,6 +3,7 @@ id: products-kitchenmate-table-01
 category: product
 title: "Keukenmaat kampeertafel"
 url: /producten/keukenmaat-tafel
+tags: kampeertafel, tafel, kooktafel, eettafel, opvouwbaar, meubel
 ---
 
 ### De Keukenmaat kampeertafel

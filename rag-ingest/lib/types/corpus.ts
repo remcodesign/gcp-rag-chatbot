@@ -17,6 +17,8 @@ export interface ParsedSource {
   category: string;
   title: string;
   url: string;
+  /** Optional synonym/tag terms from the `tags:` front-matter key. */
+  tags: string[];
   body: string;
 }
 
@@ -29,6 +31,8 @@ export interface Chunk {
   category: string;
   title: string;
   url: string;
+  /** Synonym/tag terms carried from the source front-matter. */
+  tags: string[];
 }
 
 /** A chunk that failed to write — reported but non-fatal. */

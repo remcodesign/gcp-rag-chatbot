@@ -3,6 +3,7 @@ id: products-stove-01
 category: product
 title: "Kooktoestel Vuurwerk campinggaskachel"
 url: /producten/vuurwerk
+tags: kooktoestel, koken, gasfornuis, campingkachel, brander, eten, kookgerei
 ---
 
 ### Het Vuurwerk kooktoestel aansluiten

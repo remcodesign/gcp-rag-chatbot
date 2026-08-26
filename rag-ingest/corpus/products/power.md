@@ -3,6 +3,7 @@ id: products-voltz-power-01
 category: product
 title: "Voltz draagbaar vermogen"
 url: /producten/voltz-power
+tags: powerbank, accu, batterij, opladen, stroom, vermogen, zonnepaneel
 ---
 
 ### De Voltz power station

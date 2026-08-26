@@ -3,6 +3,7 @@ id: products-boots-01
 category: product
 title: "Stapproever wandelschoenen"
 url: /producten/stapproever
+tags: wandelschoenen, schoenen, laarzen, wandelen, zool, waterdicht
 ---
 
 ### De Stapproever wandelschoenen inlopen

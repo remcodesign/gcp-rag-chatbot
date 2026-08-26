@@ -3,6 +3,7 @@ id: products-backpack-01
 category: product
 title: "Trailback 40 rugzak instelling"
 url: /producten/trailback-40
+tags: rugzak, backpack, tas, dragen, heupband, rugpaneel
 ---
 
 ### De Trailback 40 instellen

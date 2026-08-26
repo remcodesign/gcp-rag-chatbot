@@ -22,11 +22,14 @@ import type { ParsedSource } from './types/corpus.js';
 
 /** Result of parsing a single source file (success or failure). */
 export type ParseResult =
-  | { ok: true; id: string; category: string; title: string; url: string; body: string }
+  | { ok: true; id: string; category: string; title: string; url: string; tags: string[]; body: string }
   | { ok: false; reason: string };
 
 /** Required front-matter keys. A file missing any of these is skipped (logged). */
 export const REQUIRED_KEYS = ['id', 'category', 'title', 'url'] as const;
+
+/** Optional front-matter keys parsed when present (never required). */
+export const OPTIONAL_KEYS = ['tags'] as const;
 
 export interface ParseOptions {
   requiredKeys?: readonly string[];
@@ -42,6 +45,25 @@ export function parseKeyValue(line: string): { key: string; value: string } | nu
     value = value.slice(1, -1);
   }
   return { key, value };
+}
+
+/**
+ * Splits a comma-separated tag string into trimmed, non-empty terms.
+ * @param raw the raw `tags:` value (may be empty/undefined).
+ * @returns a de-duplicated list of trimmed tags.
+ */
+export function parseTags(raw: string | undefined): string[] {
+  if (!raw) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of raw.split(',')) {
+    const t = part.trim();
+    if (t && !seen.has(t)) {
+      seen.add(t);
+      out.push(t);
+    }
+  }
+  return out;
 }
 
 /**
@@ -105,6 +127,7 @@ export function parseSource(
     category: meta.category ?? '',
     title: meta.title ?? '',
     url: meta.url ?? '',
+    tags: parseTags(meta.tags),
     body,
   };
 

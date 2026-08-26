@@ -3,6 +3,7 @@ id: products-pionier-poles-01
 category: product
 title: "Pionier wandelstokken"
 url: /producten/pionier-wandelstokken
+tags: wandelstokken, stokken, trekking, wandelen, poles, wandelstok
 ---
 
 ### De Pionier wandelstokken

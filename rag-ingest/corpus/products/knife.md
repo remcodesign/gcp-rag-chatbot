@@ -3,6 +3,7 @@ id: products-backcountry-knife-01
 category: product
 title: "Bergkam zakmes"
 url: /producten/bergkam-zakmes
+tags: zakmes, mes, knif, snijden, lemmet, gereedschap
 ---
 
 ### Het Bergkam zakmes

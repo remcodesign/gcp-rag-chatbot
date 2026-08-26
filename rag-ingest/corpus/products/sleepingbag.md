@@ -3,6 +3,7 @@ id: products-sleepingbag-01
 category: product
 title: "Nachtbloem slaapzak comfort"
 url: /producten/nachtbloem
+tags: slaapzak, slapen, isolatie, warmte, comfort, mummie
 ---
 
 ### Comfort en isolatie van de Nachtbloem
