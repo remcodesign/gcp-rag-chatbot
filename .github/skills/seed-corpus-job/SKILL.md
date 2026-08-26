@@ -34,6 +34,44 @@ raw text, then an added vector field so retrieval can search it — and finally 
 | `lib/loadSources.ts` | `loadSources(dir)` recursive reader of `*.md` |
 | `src/cli.ts` | job entrypoint; reads `CORPUS_DIR`, seeds, exits non-zero on failure |
 
+## Corpus authoring — real variation, not clones
+
+Adding more content does **not** mean adding near-copies of existing files. A
+corpus of look-alike chunks makes retrieval/de-dup harder and adds embed cost with
+no retrieval-quality benefit. Every added file must carry **genuinely distinct
+content**.
+
+- **Do NOT make `-2` clones.** A `backpack-2.md` that re-writes the same product
+  (same name, same specs, same setup) dillutes the vector space. If a topic is
+  already covered, extend the *original* file instead of creating a sibling.
+- **Merge, don't duplicate.** Reachable sub-topics (e.g. an extra FAQs section)
+  belong inside the original file that owns the topic (`care.md`), not a
+  `care-2.md`.
+- **New content = new identity.** When adding a file, give it a real variation:
+  a **new product** (distinct name + specs + setup + care + warranty), a **new
+  topic**, or a **new category** in the same domain. For a camping/outdoor corpus
+  that means genuinely different items (knife, headlamp, power station, filter,
+  table, poles) rather than paraphrase-of-the-original.
+- **Never duplicate or contradict an existing file.** Check the corpus first. A
+  second file claiming "cadeaukaarten vervallen na 24 maanden" directly
+  contradicts the existing "cadeaukaarten vervallen niet" — retrieval would
+  return conflicting sources and the demo answer would be inconsistent. When in
+  doubt, re-read the owning file before adding.
+- **Verify after adding.** Every new file must parse front-matter cleanly (0
+  skipped) and increase the chunk count meaningfully. Run `loadSources` + `parseSource`
+  + `chunkText` over the corpus and confirm no skips.
+
+### Example — the anti-pattern vs. the fix
+| Anti-pattern (clones / duplicates) | Fix (real variation) |
+| --- | --- |
+| `products/backpack-2.md` re-describing the Trailback 40 | a new, distinct product file (e.g. a knife, headlamp, water filter, power station) |
+| `faq/care-2.md` repeating `care.md` topics | append the genuinely-new sub-topic to `care.md` |
+| `policies/giftcard-policy.md` saying "24 maanden" when `giftcards.md` says "vervalt niet" | check the owning file first; do not add a conflicting policy |
+| `loyalty/redeem.md` duplicating `rewards.md` | extend `rewards.md`, or add a truly new loyalty topic (membership levels, referrals) |
+
+Any corpus content change still requires a **`CURRENT_VERSION` bump** so the
+manifest gate re-seeds (see gotchas).
+
 ## Data-flow
 ```mermaid
 flowchart TB
@@ -99,8 +137,11 @@ sequenceDiagram
 - **Re-seeding requires a version bump.** Once chunks are seeded (or a broken
   `chunkCount: 0` manifest was written), the gate only compares the version
   string. To force a real re-seed, **bump `CURRENT_VERSION`**, rebuild/push, then
-  execute the job. A `chunkCount: 0` usually means a stale image with no corpus —
-  the corpus must be baked into the image the job references.
+  execute the job. This applies to **any** corpus content change — adding or
+  editing a single `*.md` file means the old version string still matches, so the
+  job would exit "already seeded" and the new content would never reach Firestore.
+  A `chunkCount: 0` usually means a stale image with no corpus — the corpus must
+  be baked into the image the job references.
 - **Location 1 before Location 2.** Text/metadata are writable even if embedding
   later fails; a re-run only fills missing vectors.
 - **Embedding retries.** 429/5xx retried with exponential backoff
