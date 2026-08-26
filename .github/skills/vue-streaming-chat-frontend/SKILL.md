@@ -86,7 +86,9 @@ sequenceDiagram
 ## The steps
 1. **SSE consumer** — `sseTransport` (`fetch` + `ReadableStream`, POST body) yields
    raw SSE text chunks; `sseParser` turns them into typed frames (handling partial
-   buffers, comments, non-JSON data); the store appends tokens live.
+   buffers, comments, non-JSON data); the store appends tokens live. **The component
+   must then render the live `state.answer` while streaming** (not only the
+   finalized message on `done`) — see the gotcha below.
 2. **Progress UI states** — `STAGES`/`STAGE_LABELS` map backend stages to labels;
    `applyProgress` never regresses (a replayed progress event cannot jump the bar
    backward).
@@ -114,6 +116,17 @@ sequenceDiagram
   Vue's `reactive()`, so `computed`/template bindings re-render on every SSE
   mutation. A **plain object** silently breaks the UI — frames arrive (network tab
   looks fine) but nothing renders. Assert `isReactive(store.state)`.
+- **Render `state.answer` live DURING streaming, not only on `done`.** The store
+  grows `state.answer` token-by-token in every `token` frame, but the transcript
+  (`state.messages`) only receives the finalized assistant message on `done`. If
+  the component renders *only* `state.messages`, the text appears to arrive **all
+  at once** when `done` fires — masking the SSE streaming even though the backend
+  streams perfectly. Fix: render a **live assistant bubble** from `state.answer`
+  while `status === streaming`, then let the completed message (with source chips)
+  replace it on `done`. Guard the live bubble with `isStreaming` so it never
+  duplicates the finalized message. The store's grew-live behavior is already
+  asserted (`expect(state.answer).toBe('Hello ')` mid-stream), so catch this at the
+  *component* render layer, not the store.
 - **`EventSource` cannot be used.** The endpoint is a POST (a body is required);
   use `fetch` + `res.body.getReader()` + `TextDecoder`, yielding raw SSE text
   chunks to the parser. This mirrors the backend's own stream reader.

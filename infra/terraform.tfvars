@@ -1,9 +1,9 @@
-image_tag = "74d2fa1"
+image_tag = "7bdad86"
 
 # Non-thinking for now (faster, cheaper); flip to `true` to enable reasoning.
 # Later could be per-session from Firestore instead of a fixed git choice.
 thinking_mode_on = false
 
-# Minimum retrieval relevance (0..1). Tuned up to 0.50 for stricter, more
+# Minimum retrieval relevance (0..1). Tuned up to 0.35 for stricter, more
 # relevant sources.
-min_score = 0.40
+min_score = 0.35

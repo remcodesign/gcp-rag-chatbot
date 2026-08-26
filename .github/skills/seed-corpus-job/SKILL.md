@@ -26,10 +26,10 @@ raw text, then an added vector field so retrieval can search it — and finally 
 ## Files to create
 | File | Contents |
 | --- | --- |
-| `lib/frontmatter.ts` | `parseSource` — minimal `key: value` front-matter → `{id, category, title, url, body}` (no YAML dep) |
+| `lib/frontmatter.ts` | `parseSource` — minimal `key: value` front-matter → `{id, category, title, url, tags?, body}` (no YAML dep; `tags` optional, comma-split) |
 | `lib/chunker.ts` | `chunkText` (size ~800, overlap ~120) + `hashText` (SHA-256 ids) |
 | `lib/manifest.ts` | `readManifest` / `checkSeedNeeded(manifest, version)` / `writeManifest` |
-| `lib/seeder.ts` | `writeTextFields` (batch) + `writeVectors` (embed + vector write, retry/backoff) |
+| `lib/seeder.ts` | `writeTextFields` (batch, stores `tags`) + `writeVectors` (embed + vector write, retry/backoff) |
 | `lib/orchestrate.ts` | `runSeed` wiring steps + `CURRENT_VERSION` |
 | `lib/loadSources.ts` | `loadSources(dir)` recursive reader of `*.md` |
 | `src/cli.ts` | job entrypoint; reads `CORPUS_DIR`, seeds, exits non-zero on failure |
@@ -71,6 +71,47 @@ content**.
 
 Any corpus content change still requires a **`CURRENT_VERSION` bump** so the
 manifest gate re-seeds (see gotchas).
+
+## Option B — `tags` (synonyms embedded into every chunk)
+
+When retrieval misses queries that use **synonyms / generic words** (e.g. "eten",
+"hoofdlamp") while the corpus says "kooktoestel", "koplamp", the fix is Option B: a
+`tags:` front-matter list on the source, **stored on the chunk doc** and
+**prepended to the embedded text of EVERY chunk** so the synonym signal reaches
+every vector, not just the first chunk.
+
+- **Front-matter:** `tags: hoofdlamp, koplamp, lamp, verlichting` in the source
+  header. It is **optional** (never blocks a file — only `id/category/title/url`
+  are required). Parse with a tiny comma-split + trim + dedupe (`parseTags`), no
+  YAML dep.
+- **Stored on the chunk doc:** `writeTextFields` writes `tags` so the Firestore
+  chunk has a structured, queryable field (`tags: string[]` on `ParsedSource` and
+  `Chunk`).
+- **Embed into every chunk — NOT the body.** Add an `embedTextForChunk(chunk)`
+  helper that returns `"<tags>. <body text>"`, and have `writeVectors` embed that
+  instead of raw `chunk.text`. Because it runs on every chunk of a source, the
+  synonym terms reach all of that source's vectors — **not just the first chunk**
+  (the flaw of Option A, where an inline line sits only in chunk 0).
+- **Keep the stored `text` pure.** The Firestore `text` field stays the original
+  body (no tag prefix), so citations/answers and the source map remain tied to the
+  original chunk — tags only influence the embedded vector, never displayed content.
+- **This is complementary to query-side expansion (Option C):** B enriches the
+  index; C enriches the query. B alone fixes queries that use known aliases against
+  the tagged chunks.
+
+```ts
+// lib/seeder.ts
+export function embedTextForChunk(chunk: Chunk): string {
+  const tags = chunk.tags?.length ? chunk.tags.join(', ') : '';
+  return tags ? `${tags}. ${chunk.text}` : chunk.text;
+}
+// writeVectors embeds chunks.map(embedTextForChunk), not chunks.map(c => c.text)
+```
+
+- **Tests (happy + non-happy):** tags parse & de-dupe; tags absent → `[]`; the
+  embed input is tag-prefixed; the stored `text` is NOT tag-prefixed; tags are
+  stored on the doc. Assert `embedTextForChunk` directly (pure function) and check
+  the fake Firestore doc for both `text` (pure) and `tags` (array).
 
 ## Data-flow
 ```mermaid

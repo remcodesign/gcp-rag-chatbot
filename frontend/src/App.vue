@@ -77,6 +77,17 @@ const canAsk = computed(() =>
 /** The WhatsApp-style transcript (my right bubbles + assistant full-width). */
 const transcript = computed(() => store.state.messages);
 
+/** The assistant answer currently streaming, rendered live below the transcript. */
+const liveAnswer = computed(() =>
+  isStreaming.value ? store.state.answer : '',
+);
+/** Rendered HTML for the live streaming answer. */
+const liveAnswerHtml = computed(() =>
+  liveAnswer.value.trim()
+    ? renderMessageHtml(liveAnswer.value, 'assistant')
+    : '',
+);
+
 /** Formats an epoch-ms timestamp as `HH:MM` (local). */
 function formatTime(ts: number): string {
   const d = new Date(ts);
@@ -285,6 +296,20 @@ function newSession(): void {
                 >[Source {{ c.n }}] {{ c.title }}</button>
               </div>
             </div>
+          </div>
+
+          <!-- Live streaming assistant answer: shown as a full-width bubble
+               while tokens stream in, folded into the transcript on `done`. -->
+          <div
+            v-if="liveAnswerHtml"
+            class="flex flex-col items-start"
+          >
+            <div class="mb-1 flex items-center gap-1.5 text-[11px] text-(--muted)">
+              <span class="font-semibold">Northwind Assistent</span>
+              <span aria-hidden="true">·</span>
+              <span>{{ formatTime(Date.now()) }}</span>
+            </div>
+            <div class="answer w-full leading-normal text-(--text)" v-html="liveAnswerHtml"></div>
           </div>
         </div>
       </section>
