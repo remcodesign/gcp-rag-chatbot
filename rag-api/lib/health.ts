@@ -16,27 +16,27 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 interface FirestoreProbe {
-  listCollections(): Promise<unknown>;
+    listCollections(): Promise<unknown>;
 }
 
 interface HealthDeps {
-  firestore: FirestoreProbe;
+    firestore: FirestoreProbe;
 }
 
 interface HealthOptions {
-  /** Readiness probe timeout in ms (default 2000). */
-  readyTimeoutMs?: number;
+    /** Readiness probe timeout in ms (default 2000). */
+    readyTimeoutMs?: number;
 }
 
 interface HealthHandlers {
-  handleLiveness(req: IncomingMessage, res: ServerResponse): void;
-  handleReadiness(req: IncomingMessage, res: ServerResponse): Promise<void>;
+    handleLiveness(req: IncomingMessage, res: ServerResponse): void;
+    handleReadiness(req: IncomingMessage, res: ServerResponse): Promise<void>;
 }
 
 /** Writes a JSON response. */
 function json(res: ServerResponse, status: number, body: Record<string, unknown>): void {
-  res.writeHead(status, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify(body));
+    res.writeHead(status, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(body));
 }
 
 /**
@@ -44,36 +44,36 @@ function json(res: ServerResponse, status: number, body: Record<string, unknown>
  * can probe a real dependency (not just return 200).
  */
 export function createHealth(
-  { firestore }: HealthDeps,
-  options: HealthOptions = {},
+    { firestore }: HealthDeps,
+    options: HealthOptions = {},
 ): HealthHandlers {
-  const readyTimeoutMs = options.readyTimeoutMs ?? 2000;
-  type TimerHandle = ReturnType<typeof setTimeout> & { unref?: () => void };
+    const readyTimeoutMs = options.readyTimeoutMs ?? 2000;
+    type TimerHandle = ReturnType<typeof setTimeout> & { unref?: () => void };
 
-  async function isReady(): Promise<boolean> {
-    const timer: Promise<boolean> = new Promise((resolve) => {
-      const t: TimerHandle = setTimeout(() => resolve(false), readyTimeoutMs);
-      t.unref?.();
-    });
-    const attempt: Promise<boolean> = (async () => {
-      try {
-        await firestore.listCollections();
-        return true;
-      } catch {
-        return false;
-      }
-    })();
-    return Promise.race([attempt, timer]);
-  }
+    async function isReady(): Promise<boolean> {
+        const timer: Promise<boolean> = new Promise((resolve) => {
+            const t: TimerHandle = setTimeout(() => resolve(false), readyTimeoutMs);
+            t.unref?.();
+        });
+        const attempt: Promise<boolean> = (async () => {
+            try {
+                await firestore.listCollections();
+                return true;
+            } catch {
+                return false;
+            }
+        })();
+        return Promise.race([attempt, timer]);
+    }
 
-  function handleLiveness(_req: IncomingMessage, res: ServerResponse): void {
-    json(res, 200, { ok: true, service: 'rag-api', live: true });
-  }
+    function handleLiveness(_req: IncomingMessage, res: ServerResponse): void {
+        json(res, 200, { ok: true, service: 'rag-api', live: true });
+    }
 
-  async function handleReadiness(_req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const ready = await isReady();
-    json(res, ready ? 200 : 503, { ok: ready, service: 'rag-api', ready });
-  }
+    async function handleReadiness(_req: IncomingMessage, res: ServerResponse): Promise<void> {
+        const ready = await isReady();
+        json(res, ready ? 200 : 503, { ok: ready, service: 'rag-api', ready });
+    }
 
-  return { handleLiveness, handleReadiness };
+    return { handleLiveness, handleReadiness };
 }

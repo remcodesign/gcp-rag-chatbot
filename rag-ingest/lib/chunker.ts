@@ -11,14 +11,14 @@ import { createHash } from 'node:crypto';
 
 /** A single chunk with its deterministic content-hash id. */
 export interface ChunkPiece {
-  index: number;
-  text: string;
-  id: string;
+    index: number;
+    text: string;
+    id: string;
 }
 
 export interface ChunkOptions {
-  size?: number;
-  overlap?: number;
+    size?: number;
+    overlap?: number;
 }
 
 /**
@@ -27,7 +27,7 @@ export interface ChunkOptions {
  * @returns 64-char hex digest.
  */
 export function hashText(text: string): string {
-  return createHash('sha256').update(String(text)).digest('hex');
+    return createHash('sha256').update(String(text)).digest('hex');
 }
 
 /**
@@ -38,18 +38,18 @@ export function hashText(text: string): string {
  * @returns an array of `{ index, text, id }` chunks (empty for blank input).
  */
 export function chunkText(text: string, { size = 800, overlap = 120 }: ChunkOptions = {}): ChunkPiece[] {
-  const body = String(text || '');
-  if (!body.trim()) return [];
-  const step = Math.max(1, size - overlap);
-  const chunks: ChunkPiece[] = [];
-  for (let start = 0; start < body.length; start += step) {
-    const textChunk = body.slice(start, start + size).trim();
-    if (!textChunk) continue;
-    chunks.push({
-      index: chunks.length,
-      text: textChunk,
-      id: hashText(textChunk),
-    });
-  }
-  return chunks;
+    const body = String(text || '');
+    if (!body.trim()) return [];
+    const step = Math.max(1, size - overlap);
+    const chunks: ChunkPiece[] = [];
+    for (let start = 0; start < body.length; start += step) {
+        const textChunk = body.slice(start, start + size).trim();
+        if (!textChunk) continue;
+        chunks.push({
+            index: chunks.length,
+            text: textChunk,
+            id: hashText(textChunk),
+        });
+    }
+    return chunks;
 }

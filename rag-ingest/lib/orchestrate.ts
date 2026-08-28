@@ -22,15 +22,15 @@ import type { Source, Chunk, SkippedSource, SeedResult } from './types/corpus.js
 export const CURRENT_VERSION = '12';
 
 export interface RunSeedDeps {
-  firestore: Firestore;
-  embeddings: Embedder;
+    firestore: Firestore;
+    embeddings: Embedder;
 }
 
 export interface RunSeedOptions {
-  sources?: Source[] | (() => Promise<Source[]> | Source[]);
-  batchSize?: number;
-  currentVersion?: string;
-  log?: (line: string) => void;
+    sources?: Source[] | (() => Promise<Source[]> | Source[]);
+    batchSize?: number;
+    currentVersion?: string;
+    log?: (line: string) => void;
 }
 
 /**
@@ -40,66 +40,66 @@ export interface RunSeedOptions {
  * @returns `{ status: 'seeded'|'already-seeded', chunkCount, skipped }`.
  */
 export async function runSeed(deps: RunSeedDeps, options: RunSeedOptions = {}): Promise<SeedResult> {
-  const { firestore, embeddings } = deps;
-  const log = options.log ?? ((line: string) => console.log(line));
-  const batchSize = options.batchSize ?? 32;
-  const currentVersion = options.currentVersion ?? CURRENT_VERSION;
+    const { firestore, embeddings } = deps;
+    const log = options.log ?? ((line: string) => console.log(line));
+    const batchSize = options.batchSize ?? 32;
+    const currentVersion = options.currentVersion ?? CURRENT_VERSION;
 
-  const manifest = await readManifest(firestore);
-  const gate = checkSeedNeeded(manifest, currentVersion);
-  if (!gate.needsSeed) {
-    log(gate.reason);
-    return { status: 'already-seeded', chunkCount: 0, skipped: [] };
-  }
-  log(gate.reason);
-
-  const sources = await resolveSources(options.sources);
-  const skipped: SkippedSource[] = [];
-  const allChunks: Chunk[] = [];
-
-  for (const src of sources) {
-    const parsed = parseSource(src.content);
-    if (!parsed.ok) {
-      skipped.push({ id: src.id, reason: parsed.reason });
-      log(`[skip] ${src.id}: ${parsed.reason}`);
-      continue;
+    const manifest = await readManifest(firestore);
+    const gate = checkSeedNeeded(manifest, currentVersion);
+    if (!gate.needsSeed) {
+        log(gate.reason);
+        return { status: 'already-seeded', chunkCount: 0, skipped: [] };
     }
-    const pieces = chunkText(parsed.body);
-    const chunks: Chunk[] = pieces.map((c, i) => ({
-      index: i,
-      text: c.text,
-      id: c.id,
-      sourceId: parsed.id,
-      category: parsed.category,
-      title: parsed.title,
-      url: parsed.url,
-      tags: parsed.tags,
-    }));
-    allChunks.push(...chunks);
-  }
+    log(gate.reason);
 
-  // Write text (L1) then embed + vectors (L2) in batches.
-  let writtenTotal = 0;
-  for (let i = 0; i < allChunks.length; i += batchSize) {
-    const batch = allChunks.slice(i, i + batchSize);
-    await writeTextFields(firestore, batch); // Location 1
-    writtenTotal += await writeVectors(firestore, batch, embeddings); // Location 2
-  }
+    const sources = await resolveSources(options.sources);
+    const skipped: SkippedSource[] = [];
+    const allChunks: Chunk[] = [];
 
-  await writeManifest(firestore, {
-    version: currentVersion,
-    chunkCount: writtenTotal,
-    model: 'openai/text-embedding-3-small',
-    dims: 1536,
-    createdAt: Date.now(),
-  });
+    for (const src of sources) {
+        const parsed = parseSource(src.content);
+        if (!parsed.ok) {
+            skipped.push({ id: src.id, reason: parsed.reason });
+            log(`[skip] ${src.id}: ${parsed.reason}`);
+            continue;
+        }
+        const pieces = chunkText(parsed.body);
+        const chunks: Chunk[] = pieces.map((c, i) => ({
+            index: i,
+            text: c.text,
+            id: c.id,
+            sourceId: parsed.id,
+            category: parsed.category,
+            title: parsed.title,
+            url: parsed.url,
+            tags: parsed.tags,
+        }));
+        allChunks.push(...chunks);
+    }
 
-  log(`seeded ${writtenTotal} chunks`);
-  return { status: 'seeded', chunkCount: writtenTotal, skipped };
+    // Write text (L1) then embed + vectors (L2) in batches.
+    let writtenTotal = 0;
+    for (let i = 0; i < allChunks.length; i += batchSize) {
+        const batch = allChunks.slice(i, i + batchSize);
+        await writeTextFields(firestore, batch); // Location 1
+        writtenTotal += await writeVectors(firestore, batch, embeddings); // Location 2
+    }
+
+    await writeManifest(firestore, {
+        version: currentVersion,
+        chunkCount: writtenTotal,
+        model: 'openai/text-embedding-3-small',
+        dims: 1536,
+        createdAt: Date.now(),
+    });
+
+    log(`seeded ${writtenTotal} chunks`);
+    return { status: 'seeded', chunkCount: writtenTotal, skipped };
 }
 
 /** Reads sources from an array/iterable or a loader function. */
 async function resolveSources(sources: RunSeedOptions['sources']): Promise<Source[]> {
-  if (typeof sources === 'function') return sources();
-  return Array.isArray(sources) ? sources : [];
+    if (typeof sources === 'function') return sources();
+    return Array.isArray(sources) ? sources : [];
 }

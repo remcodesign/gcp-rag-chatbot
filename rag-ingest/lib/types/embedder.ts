@@ -7,7 +7,7 @@
  */
 
 export interface Embedder {
-  embed(input: string | string[]): Promise<number[] | number[][]>;
-  readonly model: string;
-  readonly dimensions: number;
+    embed(input: string | string[]): Promise<number[] | number[][]>;
+    readonly model: string;
+    readonly dimensions: number;
 }

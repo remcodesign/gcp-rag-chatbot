@@ -5,153 +5,153 @@ import { createChatBridge, normalizeError } from '../../lib/generate/chatBridge.
 import { readDelta } from '../../lib/generate/readDelta.js';
 import { validateCitations, normalizeSourceToken, listSources } from '../../lib/generate/citations.js';
 import {
-  createGenerator,
-  buildMessages,
-  buildRegenMessages,
-  STAGES,
-  SYSTEM_PROMPT,
+    createGenerator,
+    buildMessages,
+    buildRegenMessages,
+    STAGES,
+    SYSTEM_PROMPT,
 } from '../../lib/generate/generator.js';
 import type { Pipeline, SourceMap } from '../../lib/types/rag.js';
 import type { ChatMessage, ChatStreamChunk, ChatStream } from '../../lib/types/chat.js';
 
 /** A recording response sink standing in for a Node `ServerResponse`. */
 interface Sink {
-  frames: string[];
-  head: { status: number; headers: Record<string, string> } | null;
-  ended: boolean;
-  destroyed: boolean;
-  writeHead(status: number, headers: Record<string, string>): void;
-  write(str: string): boolean;
-  end(): void;
+    frames: string[];
+    head: { status: number; headers: Record<string, string> } | null;
+    ended: boolean;
+    destroyed: boolean;
+    writeHead(status: number, headers: Record<string, string>): void;
+    write(str: string): boolean;
+    end(): void;
 }
 function makeSink(): Sink {
-  const sink: Sink = {
-    head: null,
-    destroyed: false,
-    ended: false,
-    frames: [],
-    writeHead(status, headers) {
-      sink.head = { status, headers };
-    },
-    write(str) {
-      sink.frames.push(String(str));
-      return true;
-    },
-    end() {
-      sink.ended = true;
-    },
-  };
-  return sink;
+    const sink: Sink = {
+        head: null,
+        destroyed: false,
+        ended: false,
+        frames: [],
+        writeHead(status, headers) {
+            sink.head = { status, headers };
+        },
+        write(str) {
+            sink.frames.push(String(str));
+            return true;
+        },
+        end() {
+            sink.ended = true;
+        },
+    };
+    return sink;
 }
 
 interface ParsedFrame {
-  id?: string;
-  event?: string;
-  data: Record<string, unknown>;
+    id?: string;
+    event?: string;
+    data: Record<string, unknown>;
 }
 
 /** Parses recorded raw SSE frames back into `{id, event, data}`. */
 function parseFrames(frames: string[]): ParsedFrame[] {
-  return frames.map((raw) => {
-    const id = (raw.match(/^id: (\d+)/m) || [])[1];
-    const event = (raw.match(/^event: (\w+)/m) || [])[1];
-    const data = JSON.parse((raw.match(/^data: (.+)$/m) || [])[1] || 'null');
-    return { id, event, data };
-  });
+    return frames.map((raw) => {
+        const id = (raw.match(/^id: (\d+)/m) || [])[1];
+        const event = (raw.match(/^event: (\w+)/m) || [])[1];
+        const data = JSON.parse((raw.match(/^data: (.+)$/m) || [])[1] || 'null');
+        return { id, event, data };
+    });
 }
 
 /** The `sourceMap` shape produced by Domain 3's `buildContext`. */
 const SOURCE_MAP: SourceMap = {
-  1: { title: 'Return policy', url: '/help/returns', id: 'returns-01' },
-  2: { title: 'Warranty overview', url: '/help/warranty', id: 'warranty-01' },
+    1: { title: 'Return policy', url: '/help/returns', id: 'returns-01' },
+    2: { title: 'Warranty overview', url: '/help/warranty', id: 'warranty-01' },
 };
 
 /** Builds a fake async-iterable OpenRouter stream. */
 function streamOf(chunks: ChatStreamChunk[]): ChatStream {
-  return {
-    async *[Symbol.asyncIterator]() {
-      for (const c of chunks) yield c;
-    },
-  };
+    return {
+        async *[Symbol.asyncIterator]() {
+            for (const c of chunks) yield c;
+        },
+    };
 }
 
 /** Wraps an arbitrary async generator as a `ChatStream`. */
 function toStream(gen: () => AsyncGenerator<unknown, void, unknown>): ChatStream {
-  return { [Symbol.asyncIterator]: gen } as unknown as ChatStream;
+    return { [Symbol.asyncIterator]: gen } as unknown as ChatStream;
 }
 
 /** Default no-op RAG pipeline that returns empty context. */
 function stalePipeline(): Pipeline {
-  return {
-    run: async () => ({ query: 'q', hits: [], sourceMap: {}, context: '', sources: [], retrievalHits: [], timedOut: false }),
-    classifyQuery: () => ({ rewrite: false, reason: 'self-contained query; no rewrite needed' }),
-  };
+    return {
+        run: async () => ({ query: 'q', hits: [], sourceMap: {}, context: '', sources: [], retrievalHits: [], timedOut: false }),
+        classifyQuery: () => ({ rewrite: false, reason: 'self-contained query; no rewrite needed' }),
+    };
 }
 
 /** A bridge whose every call returns the given stream. */
 function staticBridge(stream: ChatStream) {
-  return {
-    normalizeError,
-    streamReply: async () => ({ requestId: 'r0', model: 'm', stream }),
-  };
+    return {
+        normalizeError,
+        streamReply: async () => ({ requestId: 'r0', model: 'm', stream }),
+    };
 }
 
 function tokenStream() {
-  return streamOf([
-    { choices: [{ delta: { content: 'Please' }, finish_reason: null }] },
-    { choices: [{ delta: { content: ' return' }, finish_reason: null }] },
-    { choices: [{ delta: { content: ' [Source 1]' }, finish_reason: 'stop' }] },
-  ]);
+    return streamOf([
+        { choices: [{ delta: { content: 'Please' }, finish_reason: null }] },
+        { choices: [{ delta: { content: ' return' }, finish_reason: null }] },
+        { choices: [{ delta: { content: ' [Source 1]' }, finish_reason: 'stop' }] },
+    ]);
 }
 
 describe('Step 5.1 — SSE endpoint framing', () => {
-  it('writes typed events with monotonically increasing ids and correct headers', () => {
-    const sink = makeSink();
-    const sse = createSse(sink);
-    sse.send('progress', { stage: 'retrieval', progress: 40 });
-    sse.send('token', { text: 'hello' });
-    sse.error({ message: 'boom' });
+    it('writes typed events with monotonically increasing ids and correct headers', () => {
+        const sink = makeSink();
+        const sse = createSse(sink);
+        sse.send('progress', { stage: 'retrieval', progress: 40 });
+        sse.send('token', { text: 'hello' });
+        sse.error({ message: 'boom' });
 
-    expect(sink.head?.status).toBe(200);
-    expect(sink.head?.headers['Content-Type']).toBe('text/event-stream');
-    const frames = parseFrames(sink.frames);
-    expect(frames.map((f) => f.id)).toEqual(['0', '1', '2']);
-    expect(frames[0]?.event).toBe('progress');
-    expect(frames[2]?.event).toBe('error');
-  });
+        expect(sink.head?.status).toBe(200);
+        expect(sink.head?.headers['Content-Type']).toBe('text/event-stream');
+        const frames = parseFrames(sink.frames);
+        expect(frames.map((f) => f.id)).toEqual(['0', '1', '2']);
+        expect(frames[0]?.event).toBe('progress');
+        expect(frames[2]?.event).toBe('error');
+    });
 
-  it('streams progress then token events in order', () => {
-    const sink = makeSink();
-    const sse = createSse(sink);
-    sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RETRIEVAL, progress: 40 });
-    sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RERANK, progress: 60 });
-    sse.send(SSE_EVENT.TOKEN, { text: 'A' });
-    sse.send(SSE_EVENT.TOKEN, { text: 'B' });
+    it('streams progress then token events in order', () => {
+        const sink = makeSink();
+        const sse = createSse(sink);
+        sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RETRIEVAL, progress: 40 });
+        sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.RERANK, progress: 60 });
+        sse.send(SSE_EVENT.TOKEN, { text: 'A' });
+        sse.send(SSE_EVENT.TOKEN, { text: 'B' });
 
-    const frames = parseFrames(sink.frames);
-    expect(frames.map((f) => f.event)).toEqual(['progress', 'progress', 'token', 'token']);
-  });
+        const frames = parseFrames(sink.frames);
+        expect(frames.map((f) => f.event)).toEqual(['progress', 'progress', 'token', 'token']);
+    });
 
-  it('sends an error event, not a 500, after the stream started', () => {
-    const sink = makeSink();
-    const sse = createSse(sink);
-    sse.send('progress', { stage: 'retrieval', progress: 40 });
-    sse.error({ message: 'generation interrupted', detail: { statusCode: 500 } });
+    it('sends an error event, not a 500, after the stream started', () => {
+        const sink = makeSink();
+        const sse = createSse(sink);
+        sse.send('progress', { stage: 'retrieval', progress: 40 });
+        sse.error({ message: 'generation interrupted', detail: { statusCode: 500 } });
 
-    expect(sink.head?.status).toBe(200);
-    const frames = parseFrames(sink.frames);
-    expect(frames.at(-1)?.event).toBe('error');
-    expect(sink.ended).toBe(true);
-  });
+        expect(sink.head?.status).toBe(200);
+        const frames = parseFrames(sink.frames);
+        expect(frames.at(-1)?.event).toBe('error');
+        expect(sink.ended).toBe(true);
+    });
 
-  it('end() terminates the response so the client stream closes (browser EOF)', () => {
-    const sink = makeSink();
-    const sse = createSse(sink);
-    sse.send('token', { text: 'x' });
-    sse.end();
-    expect(sink.ended).toBe(true);
-    expect(sse.isClosed()).toBe(true);
-  });
+    it('end() terminates the response so the client stream closes (browser EOF)', () => {
+        const sink = makeSink();
+        const sse = createSse(sink);
+        sse.send('token', { text: 'x' });
+        sse.end();
+        expect(sink.ended).toBe(true);
+        expect(sse.isClosed()).toBe(true);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -159,78 +159,78 @@ describe('Step 5.1 — SSE endpoint framing', () => {
 // ---------------------------------------------------------------------------
 
 describe('Step 5.2 — OpenRouter streaming call', () => {
-  it('forwards each delta as a token event (stream fully consumed)', async () => {
-    const bridge = staticBridge(tokenStream());
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge,
-      pipeline: stalePipeline(),
-      store: { persistMessage: async () => {} },
+    it('forwards each delta as a token event (stream fully consumed)', async () => {
+        const bridge = staticBridge(tokenStream());
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge,
+            pipeline: stalePipeline(),
+            store: { persistMessage: async () => { } },
+        });
+
+        await gen.generateOnce({ sse, messages: [], sourceMap: SOURCE_MAP, request: null });
+
+        const tokens = parseFrames(sink.frames).filter((f) => f.event === 'token');
+        expect(tokens.map((t) => (t.data as { text: string }).text)).toEqual(['Please', ' return', ' [Source 1]']);
     });
 
-    await gen.generateOnce({ sse, messages: [], sourceMap: SOURCE_MAP, request: null });
-
-    const tokens = parseFrames(sink.frames).filter((f) => f.event === 'token');
-    expect(tokens.map((t) => (t.data as { text: string }).text)).toEqual(['Please', ' return', ' [Source 1]']);
-  });
-
-  it('reads deltas via readDelta, tolerating missing/empty deltas', () => {
-    expect(readDelta({ choices: [{ delta: { content: 'x' } }] })).toBe('x');
-    expect(readDelta({ choices: [{ delta: {} }] })).toBe('');
-    expect(readDelta(null)).toBe('');
-  });
-
-  it('normalizes an OpenRouter error exposing statusCode (429/5xx retryable)', () => {
-    expect(normalizeError({ message: 'rate limited', statusCode: 429 })).toMatchObject({ statusCode: 429, retryable: true });
-    expect(normalizeError({ message: 'upstream', statusCode: 500 })).toMatchObject({ statusCode: 500, retryable: true });
-    expect(normalizeError({ message: 'not found', statusCode: 404 })).toMatchObject({ statusCode: 404, retryable: false });
-  });
-
-  it('catches OpenRouterError mid-stream and throws a normalized error (non-happy)', async () => {
-    const bridge = {
-      normalizeError,
-      streamReply: async () => ({
-        requestId: 'r0',
-        model: 'm',
-        stream: toStream(async function* () {
-          yield { choices: [{ delta: { content: 'partial' } }] };
-          throw Object.assign(new Error('500'), { statusCode: 500 });
-        }),
-      }),
-    };
-    const gen = createGenerator({
-      bridge,
-      pipeline: stalePipeline(),
-      store: { persistMessage: async () => {} },
+    it('reads deltas via readDelta, tolerating missing/empty deltas', () => {
+        expect(readDelta({ choices: [{ delta: { content: 'x' } }] })).toBe('x');
+        expect(readDelta({ choices: [{ delta: {} }] })).toBe('');
+        expect(readDelta(null)).toBe('');
     });
-    await expect(
-      gen.generateOnce({ sse: null, messages: [], sourceMap: {}, request: null }),
-    ).rejects.toMatchObject({ message: '500' });
-  });
 
-  it('forwards the reasoning override to the bridge (non-thinking mode)', async () => {
-    let received: unknown;
-    const bridge = {
-      normalizeError,
-      streamReply: async (input: { reasoning?: unknown }) => {
-        received = input.reasoning;
-        return { requestId: 'r0', model: 'm', stream: streamOf([]) };
-      },
-    };
-    const gen = createGenerator({
-      bridge,
-      pipeline: stalePipeline(),
-      store: { persistMessage: async () => {} },
+    it('normalizes an OpenRouter error exposing statusCode (429/5xx retryable)', () => {
+        expect(normalizeError({ message: 'rate limited', statusCode: 429 })).toMatchObject({ statusCode: 429, retryable: true });
+        expect(normalizeError({ message: 'upstream', statusCode: 500 })).toMatchObject({ statusCode: 500, retryable: true });
+        expect(normalizeError({ message: 'not found', statusCode: 404 })).toMatchObject({ statusCode: 404, retryable: false });
     });
-    await gen.generateOnce({
-      sse: null,
-      messages: [],
-      sourceMap: {},
-      request: { reasoning: { effort: 'none' } },
+
+    it('catches OpenRouterError mid-stream and throws a normalized error (non-happy)', async () => {
+        const bridge = {
+            normalizeError,
+            streamReply: async () => ({
+                requestId: 'r0',
+                model: 'm',
+                stream: toStream(async function* () {
+                    yield { choices: [{ delta: { content: 'partial' } }] };
+                    throw Object.assign(new Error('500'), { statusCode: 500 });
+                }),
+            }),
+        };
+        const gen = createGenerator({
+            bridge,
+            pipeline: stalePipeline(),
+            store: { persistMessage: async () => { } },
+        });
+        await expect(
+            gen.generateOnce({ sse: null, messages: [], sourceMap: {}, request: null }),
+        ).rejects.toMatchObject({ message: '500' });
     });
-    expect(received).toEqual({ effort: 'none' });
-  });
+
+    it('forwards the reasoning override to the bridge (non-thinking mode)', async () => {
+        let received: unknown;
+        const bridge = {
+            normalizeError,
+            streamReply: async (input: { reasoning?: unknown }) => {
+                received = input.reasoning;
+                return { requestId: 'r0', model: 'm', stream: streamOf([]) };
+            },
+        };
+        const gen = createGenerator({
+            bridge,
+            pipeline: stalePipeline(),
+            store: { persistMessage: async () => { } },
+        });
+        await gen.generateOnce({
+            sse: null,
+            messages: [],
+            sourceMap: {},
+            request: { reasoning: { effort: 'none' } },
+        });
+        expect(received).toEqual({ effort: 'none' });
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -238,33 +238,33 @@ describe('Step 5.2 — OpenRouter streaming call', () => {
 // ---------------------------------------------------------------------------
 
 describe('Step 5.3 — inline citation generation + validation', () => {
-  it('keeps valid inline citations and canonicalizes case/whitespace', () => {
-    const text = 'You can return within 30 days [Source 2]. See [source   1] too.';
-    const { text: out, citations } = validateCitations(text, SOURCE_MAP);
-    expect(out).toContain('[Source 2]');
-    expect(out).toContain('[Source 1]');
-    expect(out).not.toContain('[source');
-    expect(citations.map((c) => c.n)).toEqual([2, 1]);
-  });
+    it('keeps valid inline citations and canonicalizes case/whitespace', () => {
+        const text = 'You can return within 30 days [Source 2]. See [source   1] too.';
+        const { text: out, citations } = validateCitations(text, SOURCE_MAP);
+        expect(out).toContain('[Source 2]');
+        expect(out).toContain('[Source 1]');
+        expect(out).not.toContain('[source');
+        expect(citations.map((c) => c.n)).toEqual([2, 1]);
+    });
 
-  it('normalizes a single source token', () => {
-    expect(normalizeSourceToken('[SOURCE 3]')).toEqual({ n: 3, token: '[Source 3]' });
-    expect(normalizeSourceToken('no')).toBeNull();
-  });
+    it('normalizes a single source token', () => {
+        expect(normalizeSourceToken('[SOURCE 3]')).toEqual({ n: 3, token: '[Source 3]' });
+        expect(normalizeSourceToken('no')).toBeNull();
+    });
 
-  it('strips a citation to a non-existent source (untrusted metadata)', () => {
-    const { text: out, citations } = validateCitations('Answer [Source 9].', SOURCE_MAP);
-    expect(out).not.toContain('[Source 9]');
-    expect(citations).toEqual([]);
-  });
+    it('strips a citation to a non-existent source (untrusted metadata)', () => {
+        const { text: out, citations } = validateCitations('Answer [Source 9].', SOURCE_MAP);
+        expect(out).not.toContain('[Source 9]');
+        expect(citations).toEqual([]);
+    });
 
-  it('listSources maps the numbered map into an ordered list (for chips)', () => {
-    const list = listSources(SOURCE_MAP);
-    expect(list).toEqual([
-      { n: 1, title: 'Return policy', url: '/help/returns', id: 'returns-01', text: '' },
-      { n: 2, title: 'Warranty overview', url: '/help/warranty', id: 'warranty-01', text: '' },
-    ]);
-  });
+    it('listSources maps the numbered map into an ordered list (for chips)', () => {
+        const list = listSources(SOURCE_MAP);
+        expect(list).toEqual([
+            { n: 1, title: 'Return policy', url: '/help/returns', id: 'returns-01', text: '' },
+            { n: 2, title: 'Warranty overview', url: '/help/warranty', id: 'warranty-01', text: '' },
+        ]);
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -272,81 +272,81 @@ describe('Step 5.3 — inline citation generation + validation', () => {
 // ---------------------------------------------------------------------------
 
 describe('Step 5.4 — mid-stream failure: context-assisted regeneration', () => {
-  it('regenerates consistently after interruption instead of re-splicing', async () => {
-    let opened = 0;
-    const bridge = {
-      normalizeError,
-      streamReply: async () => {
-        opened += 1;
-        const stream = opened === 1
-          ? toStream(async function* () {
-              yield { choices: [{ delta: { content: 'broken ' } }] };
-              throw Object.assign(new Error('500'), { statusCode: 500 });
-            })
-          : streamOf([{ choices: [{ delta: { content: 'valid continuation' } }] }]);
-        return { requestId: `r${opened}`, model: 'm', stream };
-      },
-    };
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge,
-      pipeline: stalePipeline(),
-      store: { persistMessage: async () => {} },
+    it('regenerates consistently after interruption instead of re-splicing', async () => {
+        let opened = 0;
+        const bridge = {
+            normalizeError,
+            streamReply: async () => {
+                opened += 1;
+                const stream = opened === 1
+                    ? toStream(async function* () {
+                        yield { choices: [{ delta: { content: 'broken ' } }] };
+                        throw Object.assign(new Error('500'), { statusCode: 500 });
+                    })
+                    : streamOf([{ choices: [{ delta: { content: 'valid continuation' } }] }]);
+                return { requestId: `r${opened}`, model: 'm', stream };
+            },
+        };
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge,
+            pipeline: stalePipeline(),
+            store: { persistMessage: async () => { } },
+        });
+
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'q' });
+
+        const frames = parseFrames(sink.frames);
+        expect(frames.at(-1)?.event).toBe('done');
+        const tokenTexts = frames
+            .filter((f) => f.event === 'token')
+            .map((f) => (f.data as { text: string }).text)
+            .join('');
+        expect(tokenTexts).toContain('valid continuation');
+        expect(opened).toBe(2);
     });
 
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'q' });
+    it('caps retries then emits a final error event (bounded, no infinite loop)', async () => {
+        let attempts = 0;
+        const failingStream = () => toStream(async function* () {
+            yield { choices: [{ delta: { content: 'partial' } }] };
+            throw Object.assign(new Error('500'), { statusCode: 500 });
+        });
+        const bridge = {
+            normalizeError,
+            streamReply: async () => {
+                attempts += 1;
+                return { requestId: `r${attempts}`, model: 'm', stream: failingStream() };
+            },
+        };
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator(
+            {
+                bridge,
+                pipeline: stalePipeline(),
+                store: { persistMessage: async () => { } },
+            },
+            { maxRegenRetries: 2 },
+        );
 
-    const frames = parseFrames(sink.frames);
-    expect(frames.at(-1)?.event).toBe('done');
-    const tokenTexts = frames
-      .filter((f) => f.event === 'token')
-      .map((f) => (f.data as { text: string }).text)
-      .join('');
-    expect(tokenTexts).toContain('valid continuation');
-    expect(opened).toBe(2);
-  });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'q' });
 
-  it('caps retries then emits a final error event (bounded, no infinite loop)', async () => {
-    let attempts = 0;
-    const failingStream = () => toStream(async function* () {
-      yield { choices: [{ delta: { content: 'partial' } }] };
-      throw Object.assign(new Error('500'), { statusCode: 500 });
+        const frames = parseFrames(sink.frames);
+        const errFrames = frames.filter((f) => f.event === 'error');
+        expect(errFrames.length).toBe(1);
+        expect(errFrames[0]?.data.message).toBe('generation interrupted');
+        expect(attempts).toBe(3);
     });
-    const bridge = {
-      normalizeError,
-      streamReply: async () => {
-        attempts += 1;
-        return { requestId: `r${attempts}`, model: 'm', stream: failingStream() };
-      },
-    };
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator(
-      {
-        bridge,
-        pipeline: stalePipeline(),
-        store: { persistMessage: async () => {} },
-      },
-      { maxRegenRetries: 2 },
-    );
 
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'q' });
-
-    const frames = parseFrames(sink.frames);
-    const errFrames = frames.filter((f) => f.event === 'error');
-    expect(errFrames.length).toBe(1);
-    expect(errFrames[0]?.data.message).toBe('generation interrupted');
-    expect(attempts).toBe(3);
-  });
-
-  it('builds a regenerate message array that continues, not repeats', () => {
-    const base = buildMessages({ systemPrompt: SYSTEM_PROMPT, context: 'ctx', user: 'q' });
-    expect(base.map((m) => m.role)).toEqual(['system', 'user', 'user']);
-    const regen = buildRegenMessages(base, 'partial answer');
-    expect(regen.map((m) => m.role)).toEqual(['system', 'user', 'user', 'assistant', 'user']);
-    expect(regen.at(-1)?.content).toContain('Continue');
-  });
+    it('builds a regenerate message array that continues, not repeats', () => {
+        const base = buildMessages({ systemPrompt: SYSTEM_PROMPT, context: 'ctx', user: 'q' });
+        expect(base.map((m) => m.role)).toEqual(['system', 'user', 'user']);
+        const regen = buildRegenMessages(base, 'partial answer');
+        expect(regen.map((m) => m.role)).toEqual(['system', 'user', 'user', 'assistant', 'user']);
+        expect(regen.at(-1)?.content).toContain('Continue');
+    });
 });
 
 // ---------------------------------------------------------------------------
@@ -354,228 +354,228 @@ describe('Step 5.4 — mid-stream failure: context-assisted regeneration', () =>
 // ---------------------------------------------------------------------------
 
 describe('RAG trace event (POC sidebar data)', () => {
-  it('emits a trace event with retrieval + final prompt when options.trace is set', async () => {
-    const pipeline: Pipeline = {
-      run: async () => ({
-        query: 'return policy',
-        retrievalHits: [
-          { id: 'returns-01', title: 'Return', url: '/help/returns', text: 'You can return within 30 days.', similarityScore: 0.9 },
-          { id: 'warranty-01', title: 'Warranty', url: '/help/warranty', text: 'The warranty covers defects.', similarityScore: 0.5 },
-        ],
-        sourceMap: { 1: { title: 'Return', url: '/help/returns', id: 'returns-01' } },
-        context: '[Source 1] You can return within 30 days.',
-        sources: [{ n: 1, title: 'Return', url: '/help/returns', id: 'returns-01', text: '' }],
-        classification: { rewrite: false, reason: 'self-contained' },
-        rerankInfo: { didRerank: false, reason: 'above threshold' },
-        timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
-        timedOut: false,
-      }),
-      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
-    };
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge: staticBridge(streamOf([{ choices: [{ delta: { content: 'answer' } }] }])),
-      pipeline,
-      store: { persistMessage: async () => {} },
+    it('emits a trace event with retrieval + final prompt when options.trace is set', async () => {
+        const pipeline: Pipeline = {
+            run: async () => ({
+                query: 'return policy',
+                retrievalHits: [
+                    { id: 'returns-01', title: 'Return', url: '/help/returns', text: 'You can return within 30 days.', similarityScore: 0.9 },
+                    { id: 'warranty-01', title: 'Warranty', url: '/help/warranty', text: 'The warranty covers defects.', similarityScore: 0.5 },
+                ],
+                sourceMap: { 1: { title: 'Return', url: '/help/returns', id: 'returns-01' } },
+                context: '[Source 1] You can return within 30 days.',
+                sources: [{ n: 1, title: 'Return', url: '/help/returns', id: 'returns-01', text: '' }],
+                classification: { rewrite: false, reason: 'self-contained' },
+                rerankInfo: { didRerank: false, reason: 'above threshold' },
+                timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
+                timedOut: false,
+            }),
+            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+        };
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge: staticBridge(streamOf([{ choices: [{ delta: { content: 'answer' } }] }])),
+            pipeline,
+            store: { persistMessage: async () => { } },
+        });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'return policy', options: { trace: true } });
+
+        const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+        expect(traceFrames).toHaveLength(1);
+        const data = traceFrames[0]?.data as {
+            retrieved: Array<{ keptInContext: boolean }>;
+            finalPrompt?: string[];
+        };
+        expect(data.retrieved).toHaveLength(2);
+        expect(data.retrieved[0]?.keptInContext).toBe(true);
+        expect(data.retrieved[1]?.keptInContext).toBe(false);
+        expect(data.finalPrompt).toBeDefined();
     });
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'return policy', options: { trace: true } });
 
-    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
-    expect(traceFrames).toHaveLength(1);
-    const data = traceFrames[0]?.data as {
-      retrieved: Array<{ keptInContext: boolean }>;
-      finalPrompt?: string[];
-    };
-    expect(data.retrieved).toHaveLength(2);
-    expect(data.retrieved[0]?.keptInContext).toBe(true);
-    expect(data.retrieved[1]?.keptInContext).toBe(false);
-    expect(data.finalPrompt).toBeDefined();
-  });
-
-  it('does not emit a trace event when options.trace is not requested', async () => {
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge: staticBridge(streamOf([])),
-      pipeline: stalePipeline(),
-      store: { persistMessage: async () => {} },
+    it('does not emit a trace event when options.trace is not requested', async () => {
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge: staticBridge(streamOf([])),
+            pipeline: stalePipeline(),
+            store: { persistMessage: async () => { } },
+        });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: {} });
+        const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+        expect(traceFrames).toHaveLength(0);
     });
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: {} });
-    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
-    expect(traceFrames).toHaveLength(0);
-  });
 
-  it('emits a generating progress event before the first token (Problem B)', async () => {
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge: staticBridge(tokenStream()),
-      pipeline: stalePipeline(),
-      store: { persistMessage: async () => {} },
+    it('emits a generating progress event before the first token (Problem B)', async () => {
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge: staticBridge(tokenStream()),
+            pipeline: stalePipeline(),
+            store: { persistMessage: async () => { } },
+        });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'q' });
+
+        const frames = parseFrames(sink.frames);
+        const genIdx = frames.findIndex((f) => f.event === 'progress' && f.data.stage === STAGES.GENERATING);
+        const firstTokenIdx = frames.findIndex((f) => f.event === 'token');
+        expect(genIdx).toBeGreaterThanOrEqual(0);
+        expect(firstTokenIdx).toBeGreaterThan(genIdx);
     });
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'q' });
 
-    const frames = parseFrames(sink.frames);
-    const genIdx = frames.findIndex((f) => f.event === 'progress' && f.data.stage === STAGES.GENERATING);
-    const firstTokenIdx = frames.findIndex((f) => f.event === 'token');
-    expect(genIdx).toBeGreaterThanOrEqual(0);
-    expect(firstTokenIdx).toBeGreaterThan(genIdx);
-  });
+    it('includes the generation timing in the trace payload (Problem D)', async () => {
+        const pipeline: Pipeline = {
+            run: async () => ({
+                query: 'q',
+                hits: [],
+                retrievalHits: [],
+                sourceMap: {},
+                context: '',
+                sources: [],
+                classification: { rewrite: false, reason: 'self-contained' },
+                rerankInfo: { didRerank: false, reason: 'above threshold' },
+                timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
+                timedOut: false,
+            }),
+            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+        };
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge: staticBridge(streamOf([{ choices: [{ delta: { content: 'answer' } }] }])),
+            pipeline,
+            store: { persistMessage: async () => { } },
+        });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: { trace: true } });
 
-  it('includes the generation timing in the trace payload (Problem D)', async () => {
-    const pipeline: Pipeline = {
-      run: async () => ({
-        query: 'q',
-        hits: [],
-        retrievalHits: [],
-        sourceMap: {},
-        context: '',
-        sources: [],
-        classification: { rewrite: false, reason: 'self-contained' },
-        rerankInfo: { didRerank: false, reason: 'above threshold' },
-        timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
-        timedOut: false,
-      }),
-      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
-    };
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge: staticBridge(streamOf([{ choices: [{ delta: { content: 'answer' } }] }])),
-      pipeline,
-      store: { persistMessage: async () => {} },
+        const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+        expect(traceFrames).toHaveLength(1);
+        const timings = (traceFrames[0]?.data as { timings?: { generation?: number; e2e?: number; total?: number } }).timings;
+        expect(timings).toBeDefined();
+        expect(typeof timings?.generation).toBe('number');
+        expect((timings?.generation ?? -1) >= 0).toBe(true);
+        // E2E = pipeline total + generation.
+        expect(timings?.e2e).toBe((timings?.total ?? 0) + (timings?.generation ?? 0));
     });
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: { trace: true } });
 
-    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
-    expect(traceFrames).toHaveLength(1);
-    const timings = (traceFrames[0]?.data as { timings?: { generation?: number; e2e?: number; total?: number } }).timings;
-    expect(timings).toBeDefined();
-    expect(typeof timings?.generation).toBe('number');
-    expect((timings?.generation ?? -1) >= 0).toBe(true);
-    // E2E = pipeline total + generation.
-    expect(timings?.e2e).toBe((timings?.total ?? 0) + (timings?.generation ?? 0));
-  });
+    it('surfaces token usage, TTFT and tokens-per-second in the trace payload', async () => {
+        const pipeline: Pipeline = {
+            run: async () => ({
+                query: 'q',
+                hits: [],
+                retrievalHits: [],
+                sourceMap: {},
+                context: '',
+                sources: [],
+                classification: { rewrite: false, reason: 'self-contained' },
+                rerankInfo: { didRerank: false, reason: 'above threshold' },
+                timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
+                timedOut: false,
+            }),
+            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+        };
+        const sink = makeSink();
+        const sse = createSse(sink);
+        // Stream: content tokens then a final usage chunk (no content choice).
+        const usageStream = streamOf([
+            { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] },
+            { choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }] },
+            { usage: { promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 } },
+        ]);
+        const gen = createGenerator({
+            bridge: staticBridge(usageStream),
+            pipeline,
+            store: { persistMessage: async () => { } },
+        });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: { trace: true } });
 
-  it('surfaces token usage, TTFT and tokens-per-second in the trace payload', async () => {
-    const pipeline: Pipeline = {
-      run: async () => ({
-        query: 'q',
-        hits: [],
-        retrievalHits: [],
-        sourceMap: {},
-        context: '',
-        sources: [],
-        classification: { rewrite: false, reason: 'self-contained' },
-        rerankInfo: { didRerank: false, reason: 'above threshold' },
-        timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
-        timedOut: false,
-      }),
-      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
-    };
-    const sink = makeSink();
-    const sse = createSse(sink);
-    // Stream: content tokens then a final usage chunk (no content choice).
-    const usageStream = streamOf([
-      { choices: [{ delta: { content: 'Hello' }, finish_reason: null }] },
-      { choices: [{ delta: { content: ' world' }, finish_reason: 'stop' }] },
-      { usage: { promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 } },
-    ]);
-    const gen = createGenerator({
-      bridge: staticBridge(usageStream),
-      pipeline,
-      store: { persistMessage: async () => {} },
+        const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
+        expect(traceFrames).toHaveLength(1);
+        const data = traceFrames[0]?.data as {
+            usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number | null };
+            ttftMs?: number;
+            tokensPerSecond?: number | null;
+        };
+        expect(data.usage).toEqual({ promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 });
+        expect(typeof data.ttftMs).toBe('number');
+        expect(data.ttftMs ?? -1).toBeGreaterThanOrEqual(0);
+        expect(data.tokensPerSecond).toBeGreaterThan(0);
     });
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'q', options: { trace: true } });
 
-    const traceFrames = parseFrames(sink.frames).filter((f) => f.event === 'trace');
-    expect(traceFrames).toHaveLength(1);
-    const data = traceFrames[0]?.data as {
-      usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number | null };
-      ttftMs?: number;
-      tokensPerSecond?: number | null;
-    };
-    expect(data.usage).toEqual({ promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 });
-    expect(typeof data.ttftMs).toBe('number');
-    expect(data.ttftMs ?? -1).toBeGreaterThanOrEqual(0);
-    expect(data.tokensPerSecond).toBeGreaterThan(0);
-  });
+    it('persists the user message and feeds prior turns into the prompt (history)', async () => {
+        const persisted: Array<{ role: string; content: string; complete: boolean }> = [];
+        const store = {
+            listMessages: async () => [
+                { id: 'm1', role: 'user', content: 'Hoe werken retouren?', sources: [], complete: true, createdAt: 1, updatedAt: 1 },
+                { id: 'm2', role: 'assistant', content: 'Binnen 30 dagen.', sources: [], complete: true, createdAt: 2, updatedAt: 2 },
+            ],
+            persistMessage: async (_sid: string, m: { role: string; content: string; complete: boolean }) => { persisted.push(m); },
+        };
+        let seenMessages: ChatMessage[] = [];
+        const pipeline: Pipeline = {
+            run: async (q, opts) => { seenMessages = opts?.history ?? []; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: 'ctx', sources: [], timedOut: false }; },
+            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+        };
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge: staticBridge(tokenStream()),
+            pipeline,
+            store: store as never,
+            logger: { info: () => { }, warn: () => { }, error: () => { } },
+        });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'En de wachtrij?', options: { trace: true } });
 
-  it('persists the user message and feeds prior turns into the prompt (history)', async () => {
-    const persisted: Array<{ role: string; content: string; complete: boolean }> = [];
-    const store = {
-      listMessages: async () => [
-        { id: 'm1', role: 'user', content: 'Hoe werken retouren?', sources: [], complete: true, createdAt: 1, updatedAt: 1 },
-        { id: 'm2', role: 'assistant', content: 'Binnen 30 dagen.', sources: [], complete: true, createdAt: 2, updatedAt: 2 },
-      ],
-      persistMessage: async (_sid: string, m: { role: string; content: string; complete: boolean }) => { persisted.push(m); },
-    };
-    let seenMessages: ChatMessage[] = [];
-    const pipeline: Pipeline = {
-      run: async (q, opts) => { seenMessages = opts?.history ?? []; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: 'ctx', sources: [], timedOut: false }; },
-      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
-    };
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge: staticBridge(tokenStream()),
-      pipeline,
-      store: store as never,
-      logger: { info: () => {}, warn: () => {}, error: () => {} },
+        // The user turn was persisted (the assistant turn is persisted separately).
+        const userPersisted = persisted.filter((m) => m.role === 'user');
+        expect(userPersisted).toHaveLength(1);
+        expect(userPersisted[0]?.content).toBe('En de wachtrij?');
+        expect(userPersisted[0]?.complete).toBe(true);
+        expect(persisted.some((m) => m.role === 'assistant')).toBe(true);
+        // Prior turns forwarded to the pipeline for classification/history.
+        expect(seenMessages.map((m) => m.content)).toEqual(['Hoe werken retouren?', 'Binnen 30 dagen.']);
+        // The LLM prompt includes the prior turns (via buildMessages) before the new query.
+        const traceFrame = parseFrames(sink.frames).find((f) => f.event === 'trace');
+        const finalPrompt = (traceFrame?.data as { finalPrompt?: string[] })?.finalPrompt?.join('\n') ?? '';
+        expect(finalPrompt).toContain('Hoe werken retouren?');
+        expect(finalPrompt).toContain('Binnen 30 dagen.');
+        expect(finalPrompt).toContain('En de wachtrij?');
     });
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'En de wachtrij?', options: { trace: true } });
 
-    // The user turn was persisted (the assistant turn is persisted separately).
-    const userPersisted = persisted.filter((m) => m.role === 'user');
-    expect(userPersisted).toHaveLength(1);
-    expect(userPersisted[0]?.content).toBe('En de wachtrij?');
-    expect(userPersisted[0]?.complete).toBe(true);
-    expect(persisted.some((m) => m.role === 'assistant')).toBe(true);
-    // Prior turns forwarded to the pipeline for classification/history.
-    expect(seenMessages.map((m) => m.content)).toEqual(['Hoe werken retouren?', 'Binnen 30 dagen.']);
-    // The LLM prompt includes the prior turns (via buildMessages) before the new query.
-    const traceFrame = parseFrames(sink.frames).find((f) => f.event === 'trace');
-    const finalPrompt = (traceFrame?.data as { finalPrompt?: string[] })?.finalPrompt?.join('\n') ?? '';
-    expect(finalPrompt).toContain('Hoe werken retouren?');
-    expect(finalPrompt).toContain('Binnen 30 dagen.');
-    expect(finalPrompt).toContain('En de wachtrij?');
-  });
+    it('ends the session with a friendly Dutch message when the turn cap is reached', async () => {
+        const store = {
+            listMessages: async () =>
+                // 5 full turns: user + assistant, repeated 5x -> 5 assistant replies.
+                Array.from({ length: 10 }, (_, i) => ({
+                    id: `m${i}`, role: i % 2 === 0 ? 'user' : 'assistant', content: `turn ${i}`, sources: [], complete: true, createdAt: i, updatedAt: i,
+                })),
+            persistMessage: async () => { },
+        };
+        const called = { pipeline: 0, bridge: 0 };
+        const pipeline: Pipeline = {
+            run: async (q) => { called.pipeline += 1; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: '', sources: [], timedOut: false }; },
+            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
+        };
+        const sink = makeSink();
+        const sse = createSse(sink);
+        const gen = createGenerator({
+            bridge: { ...staticBridge(tokenStream()), streamReply: async () => { called.bridge += 1; return { requestId: 'r', model: 'm', stream: tokenStream() }; } },
+            pipeline,
+            store: store as never,
+            logger: { info: () => { }, warn: () => { }, error: () => { } },
+        });
+        await gen.streamAnswer({ sse, sessionId: 's', query: 'Nog een vraag' });
 
-  it('ends the session with a friendly Dutch message when the turn cap is reached', async () => {
-    const store = {
-      listMessages: async () =>
-        // 5 full turns: user + assistant, repeated 5x -> 5 assistant replies.
-        Array.from({ length: 10 }, (_, i) => ({
-          id: `m${i}`, role: i % 2 === 0 ? 'user' : 'assistant', content: `turn ${i}`, sources: [], complete: true, createdAt: i, updatedAt: i,
-        })),
-      persistMessage: async () => {},
-    };
-    const called = { pipeline: 0, bridge: 0 };
-    const pipeline: Pipeline = {
-      run: async (q) => { called.pipeline += 1; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: '', sources: [], timedOut: false }; },
-      classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
-    };
-    const sink = makeSink();
-    const sse = createSse(sink);
-    const gen = createGenerator({
-      bridge: { ...staticBridge(tokenStream()), streamReply: async () => { called.bridge += 1; return { requestId: 'r', model: 'm', stream: tokenStream() }; } },
-      pipeline,
-      store: store as never,
-      logger: { info: () => {}, warn: () => {}, error: () => {} },
+        // No LLM call happened.
+        expect(called.pipeline).toBe(0);
+        expect(called.bridge).toBe(0);
+        // A token carried the Dutch end message, then done.
+        const tokenFrame = parseFrames(sink.frames).find((f) => f.event === 'token');
+        const text = (tokenFrame?.data as { text?: string })?.text ?? '';
+        expect(text.length).toBeGreaterThan(0);
+        expect(text).not.toContain('I don\'t know');
+        // Dutch end message present.
+        expect(/[a-zA-Z]{4,}/.test(text)).toBe(true);
+        expect(parseFrames(sink.frames).some((f) => f.event === 'done')).toBe(true);
     });
-    await gen.streamAnswer({ sse, sessionId: 's', query: 'Nog een vraag' });
-
-    // No LLM call happened.
-    expect(called.pipeline).toBe(0);
-    expect(called.bridge).toBe(0);
-    // A token carried the Dutch end message, then done.
-    const tokenFrame = parseFrames(sink.frames).find((f) => f.event === 'token');
-    const text = (tokenFrame?.data as { text?: string })?.text ?? '';
-    expect(text.length).toBeGreaterThan(0);
-    expect(text).not.toContain('I don\'t know');
-    // Dutch end message present.
-    expect(/[a-zA-Z]{4,}/.test(text)).toBe(true);
-    expect(parseFrames(sink.frames).some((f) => f.event === 'done')).toBe(true);
-  });
 });

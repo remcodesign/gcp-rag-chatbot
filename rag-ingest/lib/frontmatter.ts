@@ -22,8 +22,8 @@ import type { ParsedSource } from './types/corpus.js';
 
 /** Result of parsing a single source file (success or failure). */
 export type ParseResult =
-  | { ok: true; id: string; category: string; title: string; url: string; tags: string[]; body: string }
-  | { ok: false; reason: string };
+    | { ok: true; id: string; category: string; title: string; url: string; tags: string[]; body: string }
+    | { ok: false; reason: string };
 
 /** Required front-matter keys. A file missing any of these is skipped (logged). */
 export const REQUIRED_KEYS = ['id', 'category', 'title', 'url'] as const;
@@ -32,19 +32,19 @@ export const REQUIRED_KEYS = ['id', 'category', 'title', 'url'] as const;
 export const OPTIONAL_KEYS = ['tags'] as const;
 
 export interface ParseOptions {
-  requiredKeys?: readonly string[];
+    requiredKeys?: readonly string[];
 }
 
 /** Parses a single `key: value` line, stripping surrounding quotes. */
 export function parseKeyValue(line: string): { key: string; value: string } | null {
-  const idx = line.indexOf(':');
-  if (idx === -1) return null;
-  const key = line.slice(0, idx).trim();
-  let value = line.slice(idx + 1).trim();
-  if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-    value = value.slice(1, -1);
-  }
-  return { key, value };
+    const idx = line.indexOf(':');
+    if (idx === -1) return null;
+    const key = line.slice(0, idx).trim();
+    let value = line.slice(idx + 1).trim();
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        value = value.slice(1, -1);
+    }
+    return { key, value };
 }
 
 /**
@@ -53,17 +53,17 @@ export function parseKeyValue(line: string): { key: string; value: string } | nu
  * @returns a de-duplicated list of trimmed tags.
  */
 export function parseTags(raw: string | undefined): string[] {
-  if (!raw) return [];
-  const seen = new Set<string>();
-  const out: string[] = [];
-  for (const part of raw.split(',')) {
-    const t = part.trim();
-    if (t && !seen.has(t)) {
-      seen.add(t);
-      out.push(t);
+    if (!raw) return [];
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const part of raw.split(',')) {
+        const t = part.trim();
+        if (t && !seen.has(t)) {
+            seen.add(t);
+            out.push(t);
+        }
     }
-  }
-  return out;
+    return out;
 }
 
 /**
@@ -75,61 +75,61 @@ export function parseTags(raw: string | undefined): string[] {
  *          the failure shape `{ ok: false, reason }`.
  */
 export function parseSource(
-  raw: string,
-  { requiredKeys = REQUIRED_KEYS }: ParseOptions = {},
+    raw: string,
+    { requiredKeys = REQUIRED_KEYS }: ParseOptions = {},
 ): ParseResult {
-  if (typeof raw !== 'string' || raw.trim().length === 0) {
-    return { ok: false, reason: 'empty file' };
-  }
-  const lines = raw.split(/\r?\n/);
-  // Must start with the front-matter delimiter.
-  if (lines[0]?.trim() !== '---') {
-    return { ok: false, reason: 'missing opening front-matter delimiter' };
-  }
-
-  const meta: Record<string, string | undefined> = {};
-  const bodyLines: string[] = [];
-  let inFrontMatter = true;
-  let closed = false;
-
-  for (let i = 1; i < lines.length; i += 1) {
-    const line = lines[i];
-    if (inFrontMatter && line?.trim() === '---') {
-      inFrontMatter = false;
-      closed = true;
-      continue;
+    if (typeof raw !== 'string' || raw.trim().length === 0) {
+        return { ok: false, reason: 'empty file' };
     }
-    if (inFrontMatter) {
-      if (!line?.trim()) continue;
-      const kv = parseKeyValue(line);
-      if (kv) meta[kv.key] = kv.value;
-      continue;
+    const lines = raw.split(/\r?\n/);
+    // Must start with the front-matter delimiter.
+    if (lines[0]?.trim() !== '---') {
+        return { ok: false, reason: 'missing opening front-matter delimiter' };
     }
-    if (line !== undefined) bodyLines.push(line);
-  }
 
-  if (!closed) {
-    return { ok: false, reason: 'unclosed front-matter block' };
-  }
+    const meta: Record<string, string | undefined> = {};
+    const bodyLines: string[] = [];
+    let inFrontMatter = true;
+    let closed = false;
 
-  const missing = requiredKeys.filter((k) => meta[k] === undefined || meta[k] === '');
-  if (missing.length > 0) {
-    return { ok: false, reason: `missing required front-matter: ${missing.join(', ')}` };
-  }
+    for (let i = 1; i < lines.length; i += 1) {
+        const line = lines[i];
+        if (inFrontMatter && line?.trim() === '---') {
+            inFrontMatter = false;
+            closed = true;
+            continue;
+        }
+        if (inFrontMatter) {
+            if (!line?.trim()) continue;
+            const kv = parseKeyValue(line);
+            if (kv) meta[kv.key] = kv.value;
+            continue;
+        }
+        if (line !== undefined) bodyLines.push(line);
+    }
 
-  const body = bodyLines.join('\n').trim();
-  if (!body) {
-    return { ok: false, reason: 'empty body after front-matter' };
-  }
+    if (!closed) {
+        return { ok: false, reason: 'unclosed front-matter block' };
+    }
 
-  const parsed: ParsedSource = {
-    id: meta.id ?? '',
-    category: meta.category ?? '',
-    title: meta.title ?? '',
-    url: meta.url ?? '',
-    tags: parseTags(meta.tags),
-    body,
-  };
+    const missing = requiredKeys.filter((k) => meta[k] === undefined || meta[k] === '');
+    if (missing.length > 0) {
+        return { ok: false, reason: `missing required front-matter: ${missing.join(', ')}` };
+    }
 
-  return { ok: true, ...parsed };
+    const body = bodyLines.join('\n').trim();
+    if (!body) {
+        return { ok: false, reason: 'empty body after front-matter' };
+    }
+
+    const parsed: ParsedSource = {
+        id: meta.id ?? '',
+        category: meta.category ?? '',
+        title: meta.title ?? '',
+        url: meta.url ?? '',
+        tags: parseTags(meta.tags),
+        body,
+    };
+
+    return { ok: true, ...parsed };
 }

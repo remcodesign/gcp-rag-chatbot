@@ -31,22 +31,22 @@ const SANITIZE_OPTS = { ADD_ATTR: ['target'] };
  * present. No `any`: the input is `unknown`, narrowed by runtime checks.
  */
 function resolveSanitize(): Sanitizer | null {
-  const factory = DOMPurify as unknown as ((root?: unknown) => { sanitize: (html: string, opts?: object) => string }) | undefined;
-  if (typeof factory !== 'function') return null;
+	const factory = DOMPurify as unknown as ((root?: unknown) => { sanitize: (html: string, opts?: object) => string }) | undefined;
+	if (typeof factory !== 'function') return null;
 
-  const context: unknown = typeof window !== 'undefined' ? window : null;
-  if (!context) return null;
+	const context: unknown = typeof window !== 'undefined' ? window : null;
+	if (!context) return null;
 
-  try {
-    const inst = factory(context);
-    if (inst && typeof inst.sanitize === 'function') {
-      const fn = inst.sanitize;
-      return (html: string): string => fn(html, SANITIZE_OPTS);
-    }
-  } catch {
-    /* fall through to escape fallback */
-  }
-  return null;
+	try {
+		const inst = factory(context);
+		if (inst && typeof inst.sanitize === 'function') {
+			const fn = inst.sanitize;
+			return (html: string): string => fn(html, SANITIZE_OPTS);
+		}
+	} catch {
+		/* fall through to escape fallback */
+	}
+	return null;
 }
 
 /**
@@ -55,11 +55,11 @@ function resolveSanitize(): Sanitizer | null {
  * reaches the DOM; the browser always uses the real DOMPurify.
  */
 function escapeFallback(html: string): string {
-  return String(html)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
+	return String(html)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;');
 }
 
 /**
@@ -70,8 +70,8 @@ function escapeFallback(html: string): string {
  * @returns sanitized HTML.
  */
 export function renderMarkdown(text = '', deps: MarkdownDeps = {}): string {
-  const parse = deps.parse ?? ((md: string): string => String(marked.parse(String(md ?? ''), { gfm: true, breaks: true })));
-  const sanitize = deps.sanitize ?? resolveSanitize() ?? escapeFallback;
-  const html = parse(String(text ?? ''));
-  return sanitize(html);
+	const parse = deps.parse ?? ((md: string): string => String(marked.parse(String(md ?? ''), { gfm: true, breaks: true })));
+	const sanitize = deps.sanitize ?? resolveSanitize() ?? escapeFallback;
+	const html = parse(String(text ?? ''));
+	return sanitize(html);
 }

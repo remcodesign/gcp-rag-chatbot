@@ -8,36 +8,36 @@
  */
 
 export interface FirestoreDocumentData {
-  [key: string]: unknown;
+    [key: string]: unknown;
 }
 
 export interface FirestoreDocumentSnapshot {
-  readonly exists: boolean;
-  data(): FirestoreDocumentData | undefined;
+    readonly exists: boolean;
+    data(): FirestoreDocumentData | undefined;
 }
 
 export interface FirestoreDocumentRef {
-  readonly id: string;
-  get(): Promise<FirestoreDocumentSnapshot>;
-  set(data: FirestoreDocumentData, options?: { merge?: boolean }): Promise<void>;
-  collection(id: string): FirestoreCollectionRef;
+    readonly id: string;
+    get(): Promise<FirestoreDocumentSnapshot>;
+    set(data: FirestoreDocumentData, options?: { merge?: boolean }): Promise<void>;
+    collection(id: string): FirestoreCollectionRef;
 }
 
 export interface FirestoreCollectionRef {
-  doc(id?: string): FirestoreDocumentRef;
+    doc(id?: string): FirestoreDocumentRef;
 }
 
 export interface FirestoreWriteBatch {
-  set(
-    ref: FirestoreDocumentRef,
-    data: FirestoreDocumentData,
-    options?: { merge?: boolean },
-  ): FirestoreWriteBatch;
-  commit(): Promise<void>;
+    set(
+        ref: FirestoreDocumentRef,
+        data: FirestoreDocumentData,
+        options?: { merge?: boolean },
+    ): FirestoreWriteBatch;
+    commit(): Promise<void>;
 }
 
 /** The shape of a Firestore-shaped backend (real client or in-memory fake). */
 export interface Firestore {
-  collection(path: string | string[]): FirestoreCollectionRef;
-  batch(): FirestoreWriteBatch;
+    collection(path: string | string[]): FirestoreCollectionRef;
+    batch(): FirestoreWriteBatch;
 }

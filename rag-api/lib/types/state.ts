@@ -8,16 +8,16 @@
 import type { SourceInfo } from './rag.js';
 
 export interface StateStoreLike {
-  persistMessage(
-    sessionId: string,
-    message: {
-      role: 'assistant' | 'user';
-      content: string;
-      sources?: SourceInfo[];
-      complete: boolean;
-    },
-  ): Promise<unknown>;
-  listMessages?(sessionId: string): Promise<
-    Array<{ id: string; role: 'assistant' | 'user'; content: string; sources: SourceInfo[]; complete: boolean; createdAt: number; updatedAt: number }>
-  >;
+    persistMessage(
+        sessionId: string,
+        message: {
+            role: 'assistant' | 'user';
+            content: string;
+            sources?: SourceInfo[];
+            complete: boolean;
+        },
+    ): Promise<unknown>;
+    listMessages?(sessionId: string): Promise<
+        Array<{ id: string; role: 'assistant' | 'user'; content: string; sources: SourceInfo[]; complete: boolean; createdAt: number; updatedAt: number }>
+    >;
 }

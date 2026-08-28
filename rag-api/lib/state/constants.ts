@@ -9,38 +9,38 @@
 
 /** Collection names (top-level). */
 export const COLLECTIONS = {
-  SESSIONS: 'sessions',
-  CORPUS: 'corpus',
+    SESSIONS: 'sessions',
+    CORPUS: 'corpus',
 } as const;
 
 /** Sub-collection names nested under a session. */
 export const SESSION_SUBCOLLECTIONS = {
-  EVENTS: 'events',
-  MESSAGES: 'messages',
+    EVENTS: 'events',
+    MESSAGES: 'messages',
 } as const;
 
 /** Allowed `sessions/{id}.status` values. */
 export const SESSION_STATUS = {
-  ACTIVE: 'active',
-  CLOSED: 'closed',
+    ACTIVE: 'active',
+    CLOSED: 'closed',
 } as const;
 
 /** Allowed `events/{id}.type` values. */
 export const EVENT_TYPE = {
-  PROGRESS: 'progress',
-  TOKEN: 'token',
-  ERROR: 'error',
+    PROGRESS: 'progress',
+    TOKEN: 'token',
+    ERROR: 'error',
 } as const;
 
 /** Allowed `messages/{id}.role` values. */
 export const MESSAGE_ROLE = {
-  USER: 'user',
-  ASSISTANT: 'assistant',
+    USER: 'user',
+    ASSISTANT: 'assistant',
 } as const;
 
 /** Default TTL for a session, in seconds (Firestore TTL field, see infra/firestore.tf). */
 export const SESSION_TTL_SECONDS = {
-  DEFAULT_SESSION: 60 * 60 * 24, // 24h idle expiry
+    DEFAULT_SESSION: 60 * 60 * 24, // 24h idle expiry
 } as const;
 
 /** Reserved event id for "no events yet" / start of stream. */

@@ -11,55 +11,55 @@ export type SseEvent = 'message' | 'progress' | 'token' | 'done' | 'trace' | 'er
 
 /** A single parsed SSE frame. `data` is JSON-parsed when possible, else kept raw. */
 export interface SseFrame {
-  id: number | null;
-  event: SseEvent;
-  data: unknown;
+    id: number | null;
+    event: SseEvent;
+    data: unknown;
 }
 
 /** `progress` payload — advances the status indicator (never regresses). */
 export interface SseProgress {
-  stage: string;
-  progress: number;
-  note?: string;
+    stage: string;
+    progress: number;
+    note?: string;
 }
 
 /** `token` payload — a text delta plus the running validated citation list. */
 export interface SseToken {
-  text: string;
-  citations: Citation[];
+    text: string;
+    citations: Citation[];
 }
 
 /** `done` payload — the final source list plus citations. */
 export interface SseDone {
-  sources: Source[];
-  citations: Citation[];
-  /** Set when the backend ended the session at the conversation limit. */
-  limitReached?: boolean;
+    sources: Source[];
+    citations: Citation[];
+    /** Set when the backend ended the session at the conversation limit. */
+    limitReached?: boolean;
 }
 
 /** `error` payload — a terminal stream message. */
 export interface SseError {
-  message: string;
-  detail?: unknown;
+    message: string;
+    detail?: unknown;
 }
 
 /** A source citation referenced by an inline `[Source N]` marker. */
 export interface Citation {
-  n: number;
-  title: string;
+    n: number;
+    title: string;
 }
 
 /** A resolved source (carried to the UI for chips / the chunk modal). */
 export interface Source {
-  n: number;
-  title: string;
-  url: string | null;
-  id: string;
-  text?: string;
+    n: number;
+    title: string;
+    url: string | null;
+    id: string;
+    text?: string;
 }
 
 /** Window-global augmentation injected at deploy time (config.ts). */
 export interface RagRuntimeGlobals {
-  __RAG_API_BASE__?: string;
-  __RAG_TRACE__?: string | boolean;
+    __RAG_API_BASE__?: string;
+    __RAG_TRACE__?: string | boolean;
 }

@@ -19,9 +19,9 @@ const MANIFEST_DOC_PATH = ['corpus', 'manifest'] as const;
  * @returns the stored manifest summary, or `null`.
  */
 export async function readManifest(firestore: Firestore): Promise<ManifestSummary | null> {
-  const ref = firestore.collection('corpus').doc('manifest');
-  const snap = await ref.get();
-  return snap.exists ? (snap.data() as ManifestSummary | undefined) ?? null : null;
+    const ref = firestore.collection('corpus').doc('manifest');
+    const snap = await ref.get();
+    return snap.exists ? (snap.data() as ManifestSummary | undefined) ?? null : null;
 }
 
 /**
@@ -31,16 +31,16 @@ export async function readManifest(firestore: Firestore): Promise<ManifestSummar
  * @returns `{ needsSeed, reason }`.
  */
 export function checkSeedNeeded(manifest: ManifestSummary | null, currentVersion: string): SeedGate {
-  if (!manifest) {
-    return { needsSeed: true, reason: 'manifest missing; seeding' };
-  }
-  if (manifest.version !== currentVersion) {
-    return {
-      needsSeed: true,
-      reason: `manifest version ${manifest.version} != current ${currentVersion}; re-seeding`,
-    };
-  }
-  return { needsSeed: false, reason: 'manifest version matches; already seeded' };
+    if (!manifest) {
+        return { needsSeed: true, reason: 'manifest missing; seeding' };
+    }
+    if (manifest.version !== currentVersion) {
+        return {
+            needsSeed: true,
+            reason: `manifest version ${manifest.version} != current ${currentVersion}; re-seeding`,
+        };
+    }
+    return { needsSeed: false, reason: 'manifest version matches; already seeded' };
 }
 
 /**
@@ -49,14 +49,14 @@ export function checkSeedNeeded(manifest: ManifestSummary | null, currentVersion
  * @param summary   `{ version, chunkCount, model, dims, createdAt }`.
  */
 export async function writeManifest(firestore: Firestore, summary: ManifestSummary): Promise<void> {
-  await firestore
-    .collection(MANIFEST_DOC_PATH[0])
-    .doc(MANIFEST_DOC_PATH[1])
-    .set({
-      version: summary.version,
-      chunkCount: summary.chunkCount,
-      model: summary.model,
-      dims: summary.dims,
-      createdAt: summary.createdAt,
-    }, { merge: true });
+    await firestore
+        .collection(MANIFEST_DOC_PATH[0])
+        .doc(MANIFEST_DOC_PATH[1])
+        .set({
+            version: summary.version,
+            chunkCount: summary.chunkCount,
+            model: summary.model,
+            dims: summary.dims,
+            createdAt: summary.createdAt,
+        }, { merge: true });
 }

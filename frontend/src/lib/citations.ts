@@ -20,10 +20,10 @@ import type { Source } from '../types/sse';
  * @returns sanitized HTML with citation spans.
  */
 export function renderAnswer(text = '', deps?: MarkdownDeps): string {
-  const html = deps && (deps.parse || deps.sanitize)
-    ? renderMarkdown(text, deps)
-    : renderMarkdown(text);
-  return html.replace(/\[Source (\d+)\]/g, '<span class="citation">[Source $1]</span>');
+    const html = deps && (deps.parse || deps.sanitize)
+        ? renderMarkdown(text, deps)
+        : renderMarkdown(text);
+    return html.replace(/\[Source (\d+)\]/g, '<span class="citation">[Source $1]</span>');
 }
 
 /**
@@ -35,7 +35,7 @@ export function renderAnswer(text = '', deps?: MarkdownDeps): string {
  *   chip never breaks) and a `text` (empty string when absent) for the chunk modal.
  */
 export function buildSourceChips(sources: Source[] = []): Source[] {
-  return sources
-    .filter((s) => s && s.title)
-    .map((s) => ({ ...s, url: s.url || '#', text: s.text || '' }));
+    return sources
+        .filter((s) => s && s.title)
+        .map((s) => ({ ...s, url: s.url || '#', text: s.text || '' }));
 }

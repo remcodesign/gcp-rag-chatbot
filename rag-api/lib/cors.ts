@@ -23,19 +23,19 @@ export const CORS_ALLOW_HEADERS = 'Content-Type, Last-Event-ID';
 
 /** The CORS headers to attach to a response. */
 export function corsHeaders(): Record<string, string> {
-  return {
-    'Access-Control-Allow-Origin': CORS_ALLOW_ORIGIN,
-    'Access-Control-Allow-Methods': CORS_ALLOW_METHODS,
-    'Access-Control-Allow-Headers': CORS_ALLOW_HEADERS,
-  };
+    return {
+        'Access-Control-Allow-Origin': CORS_ALLOW_ORIGIN,
+        'Access-Control-Allow-Methods': CORS_ALLOW_METHODS,
+        'Access-Control-Allow-Headers': CORS_ALLOW_HEADERS,
+    };
 }
 
 /** True when the request is a CORS preflight (`OPTIONS` with an Origin). */
 export function isPreflight(req: IncomingMessage): boolean {
-  return (
-    (req.method ?? '').toUpperCase() === 'OPTIONS' &&
-    (req.headers['access-control-request-method'] as string | undefined) != null
-  );
+    return (
+        (req.method ?? '').toUpperCase() === 'OPTIONS' &&
+        (req.headers['access-control-request-method'] as string | undefined) != null
+    );
 }
 
 /**
@@ -43,8 +43,8 @@ export function isPreflight(req: IncomingMessage): boolean {
  * @returns true if this was a preflight (caller should stop).
  */
 export function handlePreflight(req: IncomingMessage, res: ServerResponse): boolean {
-  if (!isPreflight(req)) return false;
-  res.writeHead(204, corsHeaders());
-  res.end();
-  return true;
+    if (!isPreflight(req)) return false;
+    res.writeHead(204, corsHeaders());
+    res.end();
+    return true;
 }

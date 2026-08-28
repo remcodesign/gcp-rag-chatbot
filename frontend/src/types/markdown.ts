@@ -12,14 +12,14 @@ export type Sanitizer = (html: string) => string;
 
 /** Injectables for `renderMarkdown`. */
 export interface MarkdownDeps {
-  parse?: MarkdownParser;
-  sanitize?: Sanitizer;
+    parse?: MarkdownParser;
+    sanitize?: Sanitizer;
 }
 
 /** DOMPurify interop shape (module may export directly or via `.default`). */
 export interface DOMPurifyLike {
-  sanitize: Sanitizer;
-  default?: { sanitize: Sanitizer };
+    sanitize: Sanitizer;
+    default?: { sanitize: Sanitizer };
 }
 
 /** DOMPurify factory callable as `dompurify({ window }) -> { sanitize }`. */

@@ -9,21 +9,21 @@
 import type { ChatStreamChunk } from '../types/chat.js';
 
 interface ReadDeltaOptions {
-  /** Dot path to the delta content (default "choices.0.delta.content"). */
-  delta?: string;
+    /** Dot path to the delta content (default "choices.0.delta.content"). */
+    delta?: string;
 }
 
 export function readDelta(
-  chunk: ChatStreamChunk | null | undefined,
-  { delta = 'choices.0.delta.content' }: ReadDeltaOptions = {},
+    chunk: ChatStreamChunk | null | undefined,
+    { delta = 'choices.0.delta.content' }: ReadDeltaOptions = {},
 ): string {
-  const parts = delta.split('.');
-  let cur: unknown = chunk;
-  for (let i = 0; cur != null && i < parts.length; i += 1) {
-    const raw = parts[i] as string | undefined;
-    if (raw === undefined) break;
-    const key = Number.isInteger(Number(raw)) ? Number(raw) : raw;
-    cur = (cur as Record<string | number, unknown>)[key];
-  }
-  return typeof cur === 'string' ? cur : '';
+    const parts = delta.split('.');
+    let cur: unknown = chunk;
+    for (let i = 0; cur != null && i < parts.length; i += 1) {
+        const raw = parts[i] as string | undefined;
+        if (raw === undefined) break;
+        const key = Number.isInteger(Number(raw)) ? Number(raw) : raw;
+        cur = (cur as Record<string | number, unknown>)[key];
+    }
+    return typeof cur === 'string' ? cur : '';
 }

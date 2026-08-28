@@ -22,14 +22,14 @@ import type { ViteEnv } from '../types/config';
 const env = import.meta.env as unknown as ViteEnv;
 
 export function resolveApiBase(): string {
-  if (typeof window !== 'undefined') {
-    const w = window as RagWindow;
-    if (w.__RAG_API_BASE__) return w.__RAG_API_BASE__;
-  }
-  if (env.VITE_API_BASE) {
-    return env.VITE_API_BASE;
-  }
-  return '';
+    if (typeof window !== 'undefined') {
+        const w = window as RagWindow;
+        if (w.__RAG_API_BASE__) return w.__RAG_API_BASE__;
+    }
+    if (env.VITE_API_BASE) {
+        return env.VITE_API_BASE;
+    }
+    return '';
 }
 
 /**
@@ -38,12 +38,12 @@ export function resolveApiBase(): string {
  * don't want the extra SSE payload.
  */
 export function resolveTraceEnabled(): boolean {
-  if (typeof window !== 'undefined') {
-    const w = window as RagWindow;
-    if (w.__RAG_TRACE__ !== undefined) return Boolean(w.__RAG_TRACE__);
-  }
-  if (env.VITE_RAG_TRACE !== undefined) {
-    return env.VITE_RAG_TRACE === 'true';
-  }
-  return true;
+    if (typeof window !== 'undefined') {
+        const w = window as RagWindow;
+        if (w.__RAG_TRACE__ !== undefined) return Boolean(w.__RAG_TRACE__);
+    }
+    if (env.VITE_RAG_TRACE !== undefined) {
+        return env.VITE_RAG_TRACE === 'true';
+    }
+    return true;
 }
