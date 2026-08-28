@@ -22,11 +22,7 @@ export async function loadSources(dir: string): Promise<Source[]> {
     const sources: Source[] = [];
     for (const file of entries) {
         const content = await readFile(file, 'utf8');
-        const rel = file
-            .replace(`${dir}${sep}`, '')
-            .replace(/\.md$/i, '')
-            .split(sep)
-            .join('/');
+        const rel = file.replace(`${dir}${sep}`, '').replace(/\.md$/i, '').split(sep).join('/');
         sources.push({ id: rel, content });
     }
     return sources;

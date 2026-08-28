@@ -28,7 +28,10 @@ export function withSoftTimeout<TValue>(
 ): Promise<SoftTimeoutResult<TValue>> {
     let timer: TimerHandle;
     const timeout: Promise<SoftTimeoutResult<TValue>> = new Promise((resolve) => {
-        timer = setTimeout(() => resolve({ timedOut: true, value: options.fallback }), options.timeoutMs);
+        timer = setTimeout(
+            () => resolve({ timedOut: true, value: options.fallback }),
+            options.timeoutMs,
+        );
         timer.unref?.();
     });
     return Promise.race([

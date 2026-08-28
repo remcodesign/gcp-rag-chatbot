@@ -61,13 +61,13 @@ async function* adaptSdkStream(
             // alongside the final content chunk; the SDK parses it to camelCase.
             ...(usage
                 ? {
-                    usage: {
-                        promptTokens: usage.promptTokens,
-                        completionTokens: usage.completionTokens,
-                        totalTokens: usage.totalTokens,
-                        cost: usage.cost ?? null,
-                    },
-                }
+                      usage: {
+                          promptTokens: usage.promptTokens,
+                          completionTokens: usage.completionTokens,
+                          totalTokens: usage.totalTokens,
+                          cost: usage.cost ?? null,
+                      },
+                  }
                 : {}),
         };
     }
@@ -79,12 +79,9 @@ async function* adaptSdkStream(
  * @param options API key + optional base URL + default provider routing config.
  * @returns a `{ chat }` provider adapter.
  */
-export function createOpenRouterClient({
-    apiKey,
-    base,
-    provider,
-    sdk,
-}: OpenRouterClientOptions): { chat: ChatProvider } {
+export function createOpenRouterClient({ apiKey, base, provider, sdk }: OpenRouterClientOptions): {
+    chat: ChatProvider;
+} {
     const client =
         sdk ??
         new OpenRouter({
@@ -101,14 +98,17 @@ export function createOpenRouterClient({
                         messages: params.messages,
                         stream: true,
                         ...(params.reasoning ? { reasoning: params.reasoning } : {}),
-                        ...(params.provider ?? provider ? { provider: params.provider ?? provider } : {}),
+                        ...((params.provider ?? provider)
+                            ? { provider: params.provider ?? provider }
+                            : {}),
                     },
                     ...(params.signal ? { signal: params.signal } : {}),
                 };
-                const sdkStream = (await client.chat.send(
-                    request as never,
-                )) as AsyncIterable<{
-                    choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>;
+                const sdkStream = (await client.chat.send(request as never)) as AsyncIterable<{
+                    choices?: Array<{
+                        delta?: { content?: string | null };
+                        finish_reason?: string | null;
+                    }>;
                 }>;
                 return adaptSdkStream(sdkStream);
             },

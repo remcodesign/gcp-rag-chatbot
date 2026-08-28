@@ -62,9 +62,7 @@ export interface FirestoreTransaction {
 /** The shape of a Firestore-shaped backend (real client or in-memory fake). */
 export interface Firestore {
     collection(path: string | string[]): FirestoreCollectionRef;
-    runTransaction<TResult>(
-        fn: (txn: FirestoreTransaction) => Promise<TResult>,
-    ): Promise<TResult>;
+    runTransaction<TResult>(fn: (txn: FirestoreTransaction) => Promise<TResult>): Promise<TResult>;
     /** Used by the readiness probe to verify the datastore is reachable. */
     listCollections(): Promise<unknown>;
     batch(): {

@@ -53,7 +53,13 @@ describe('trace — preview bounds text', () => {
 describe('trace — serializeHit', () => {
     it('maps score/id/title/url and marks kept-in-context', () => {
         const h = serializeHit(
-            { id: 'a', title: 'T', url: '/t', text: 'Some document text of sufficient length', similarityScore: 0.9 },
+            {
+                id: 'a',
+                title: 'T',
+                url: '/t',
+                text: 'Some document text of sufficient length',
+                similarityScore: 0.9,
+            },
             { rank: 1, keptInContext: true },
         );
         expect(h.id).toBe('a');

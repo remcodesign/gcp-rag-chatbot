@@ -25,7 +25,10 @@ export interface OpenSseOptions {
  * @param params transport parameters from the store.
  * @param options connection options.
  */
-export async function* openSseStream(params: SendParams, options: OpenSseOptions = {}): AsyncIterable<string> {
+export async function* openSseStream(
+    params: SendParams,
+    options: OpenSseOptions = {},
+): AsyncIterable<string> {
     const { sessionId, query, lastEventId, signal, trace } = params;
     const baseUrl = options.baseUrl ?? '';
     const url = `${baseUrl}/sessions/${encodeURIComponent(sessionId)}/messages`;
@@ -41,7 +44,9 @@ export async function* openSseStream(params: SendParams, options: OpenSseOptions
     });
 
     if (!res.ok || !res.body) {
-        const err: Error & { statusCode?: number } = new Error(`SSE request failed: HTTP ${res.status}`);
+        const err: Error & { statusCode?: number } = new Error(
+            `SSE request failed: HTTP ${res.status}`,
+        );
         err.statusCode = res.status;
         throw err;
     }
@@ -49,7 +54,7 @@ export async function* openSseStream(params: SendParams, options: OpenSseOptions
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     try {
-        for (; ;) {
+        for (;;) {
             const { done, value } = await reader.read();
             if (done) return;
             yield decoder.decode(value, { stream: true });

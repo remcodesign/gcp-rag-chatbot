@@ -37,7 +37,10 @@ export function hashText(text: string): string {
  * @param opts   `{ size = 800, overlap = 120 }`.
  * @returns an array of `{ index, text, id }` chunks (empty for blank input).
  */
-export function chunkText(text: string, { size = 800, overlap = 120 }: ChunkOptions = {}): ChunkPiece[] {
+export function chunkText(
+    text: string,
+    { size = 800, overlap = 120 }: ChunkOptions = {},
+): ChunkPiece[] {
     const body = String(text || '');
     if (!body.trim()) return [];
     const step = Math.max(1, size - overlap);

@@ -197,6 +197,12 @@ redeploy (no silent `:latest` no-op).
 
 # Build + push, then apply (interactive confirm)
 ./deploy.sh apply
+
+# Fast local loop — fix + verify (lint:fix + prettier, then typecheck/lint/knip/test), no build
+./deploy.sh fix
+
+# Verify only (typecheck/lint/knip/test), no build, no fixes
+./deploy.sh check
 ```
 
 > **Quality gate before every build:** `deploy.sh` runs, per package,
@@ -205,6 +211,10 @@ redeploy (no silent `:latest` no-op).
 > dead code can't slip in. See
 > [`.github/skills/dead-code-knip/SKILL.md`](.github/skills/dead-code-knip/SKILL.md)
 > for the settings and how to avoid introducing dead code in the first place.
+>
+> **Formatting:** Prettier is wired in via `eslint-config-prettier` (formatting
+> is Prettier's job, lint is ESLint's). Per package: `npm run format` (write),
+> `npm run format:check` (verify), `npm run lint:fix` (ESLint autofix).
 
 After a **code/corpus change**, commit it **first** so the git-SHA tag bumps —
 otherwise `apply` sees the same tag and is a no-op:

@@ -1,14 +1,26 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createOpenRouterClient } from '../../lib/generate/openRouterClient.js';
 
-type SdkChunk = { choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>; usage?: { promptTokens?: number; completionTokens?: number; totalTokens?: number; cost?: number | null } };
+type SdkChunk = {
+    choices?: Array<{ delta?: { content?: string | null }; finish_reason?: string | null }>;
+    usage?: {
+        promptTokens?: number;
+        completionTokens?: number;
+        totalTokens?: number;
+        cost?: number | null;
+    };
+};
 
 /** A minimal fake `@openrouter/sdk` client that records the request. */
 function fakeSdk(overrides: { stream?: SdkChunk[]; error?: Error } = {}) {
     const send = vi.fn(async (request: unknown) => {
         if (overrides.error) throw overrides.error;
         const chunks = overrides.stream ?? [];
-        return { [Symbol.asyncIterator]: async function* () { for (const c of chunks) yield c; } };
+        return {
+            [Symbol.asyncIterator]: async function* () {
+                for (const c of chunks) yield c;
+            },
+        };
     });
     return { chat: { send }, send };
 }
@@ -54,7 +66,12 @@ describe('createOpenRouterClient — streaming', () => {
                 { choices: [{ delta: { content: 'Hi' }, finish_reason: null }] },
                 {
                     choices: [{ delta: { content: ' there' }, finish_reason: 'stop' }],
-                    usage: { promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 },
+                    usage: {
+                        promptTokens: 120,
+                        completionTokens: 42,
+                        totalTokens: 162,
+                        cost: 0.0001,
+                    },
                 },
             ],
         });
@@ -68,7 +85,12 @@ describe('createOpenRouterClient — streaming', () => {
         for await (const chunk of stream) {
             if (chunk.usage) lastUsage = chunk.usage;
         }
-        expect(lastUsage).toEqual({ promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 });
+        expect(lastUsage).toEqual({
+            promptTokens: 120,
+            completionTokens: 42,
+            totalTokens: 162,
+            cost: 0.0001,
+        });
     });
 });
 
@@ -118,7 +140,11 @@ describe('createOpenRouterClient — error handling', () => {
         const { send } = fakeSdk({ error: statusErr });
         const client = createOpenRouterClient({ apiKey: 'k', sdk: { chat: { send } } });
         await expect(
-            client.chat.send!({ model: 'm', messages: [{ role: 'user', content: 'hi' }], stream: true }),
+            client.chat.send!({
+                model: 'm',
+                messages: [{ role: 'user', content: 'hi' }],
+                stream: true,
+            }),
         ).rejects.toMatchObject({ statusCode: 429 });
     });
 });

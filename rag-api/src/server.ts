@@ -77,10 +77,7 @@ function createRuntime(): {
         createOpenRouterClient({ apiKey: OPENROUTER_API_KEY, provider: providerConfig }),
         { model: CHAT_MODEL },
     );
-    const generator = createGenerator(
-        { bridge, pipeline, store: state },
-        { reasoning },
-    );
+    const generator = createGenerator({ bridge, pipeline, store: state }, { reasoning });
     const { handleLiveness, handleReadiness } = createHealth({ firestore });
 
     /**

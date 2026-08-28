@@ -3,10 +3,16 @@ import { corsHeaders, isPreflight, handlePreflight, CORS_ALLOW_ORIGIN } from '..
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 const preflightReq = (): IncomingMessage =>
-    ({ method: 'OPTIONS', headers: { 'access-control-request-method': 'POST' } }) as unknown as IncomingMessage;
+    ({
+        method: 'OPTIONS',
+        headers: { 'access-control-request-method': 'POST' },
+    }) as unknown as IncomingMessage;
 
 const postReq = (): IncomingMessage =>
-    ({ method: 'POST', headers: { 'content-type': 'application/json' } }) as unknown as IncomingMessage;
+    ({
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+    }) as unknown as IncomingMessage;
 
 describe('cors', () => {
     it('returns the allow-origin header for the separate frontend origin', () => {
@@ -46,7 +52,7 @@ describe('cors', () => {
     });
 
     it('does nothing for a non-preflight request (used by the SSE route)', () => {
-        const res = { writeHead() { }, end() { } } as unknown as ServerResponse;
+        const res = { writeHead() {}, end() {} } as unknown as ServerResponse;
         expect(handlePreflight(postReq(), res)).toBe(false);
     });
 });

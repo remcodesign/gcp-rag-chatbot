@@ -49,7 +49,7 @@ describe('Health endpoints (/livez, /readyz)', () => {
     });
 
     it('readiness times out (503) when the probe exceeds the budget (non-happy)', async () => {
-        const firestore = { listCollections: () => new Promise(() => { }) };
+        const firestore = { listCollections: () => new Promise(() => {}) };
         const { handleReadiness } = createHealth({ firestore }, { readyTimeoutMs: 20 });
         const res = makeRes();
         await handleReadiness({} as IncomingMessage, res as unknown as ServerResponse);

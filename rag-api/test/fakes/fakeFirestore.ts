@@ -74,7 +74,7 @@ class FakeDocumentRef implements FirestoreDocumentRef {
 
     async get(): Promise<FirestoreDocumentSnapshot> {
         const doc = this._owner.get(this._path);
-        return { exists: !!doc, data: () => (doc ?? undefined) };
+        return { exists: !!doc, data: () => doc ?? undefined };
     }
 
     async set(data: FirestoreDocumentData, opts: { merge?: boolean } = {}): Promise<void> {
@@ -92,10 +92,12 @@ class FakeCollectionRef implements FirestoreCollectionRef {
     private _orderField: string | null = null;
     private _dir: 'asc' | 'desc' = 'asc';
     private _startAfter: number | string | undefined;
-    private _vectorQuery: (FirestoreVectorQueryOptions & {
-        vectorField: string;
-        queryVector: number[];
-    }) | null = null;
+    private _vectorQuery:
+        | (FirestoreVectorQueryOptions & {
+              vectorField: string;
+              queryVector: number[];
+          })
+        | null = null;
 
     constructor(path: string[], owner: FakeFirestoreOwner) {
         this._path = path;
@@ -144,11 +146,13 @@ class FakeCollectionRef implements FirestoreCollectionRef {
             distanceResultField,
             distanceThreshold,
         } = this._vectorQuery!;
-        const distanceFn =
-            distanceMeasure === 'EUCLIDEAN' ? euclideanDistance : cosineDistance;
+        const distanceFn = distanceMeasure === 'EUCLIDEAN' ? euclideanDistance : cosineDistance;
         const all = this._owner.list(this._path, null, 'asc', undefined);
         const scored = all
-            .map((doc) => ({ doc, distance: distanceFn(doc[vectorField] as number[], queryVector) }))
+            .map((doc) => ({
+                doc,
+                distance: distanceFn(doc[vectorField] as number[], queryVector),
+            }))
             .filter((s) => distanceThreshold === undefined || s.distance <= distanceThreshold)
             .sort((x, y) => x.distance - y.distance)
             .slice(0, limit);
@@ -184,7 +188,7 @@ class FakeTransaction implements FirestoreTransaction {
     async get(ref: FirestoreDocumentRef) {
         const path = ref instanceof FakeDocumentRef ? ref.path() : [];
         const doc = this._owner.get(path);
-        return { exists: !!doc, data: () => (doc ?? undefined) };
+        return { exists: !!doc, data: () => doc ?? undefined };
     }
 
     set(ref: FirestoreDocumentRef, data: FirestoreDocumentData): void {
@@ -202,7 +206,12 @@ class FakeTransaction implements FirestoreTransaction {
 
 class FakeWriteBatch {
     private readonly _owner: FakeFirestoreOwner;
-    private readonly ops: Array<{ kind: 'set'; path: string[]; data: FirestoreDocumentData; merge: boolean }> = [];
+    private readonly ops: Array<{
+        kind: 'set';
+        path: string[];
+        data: FirestoreDocumentData;
+        merge: boolean;
+    }> = [];
 
     constructor(owner: FakeFirestoreOwner) {
         this._owner = owner;
@@ -311,7 +320,9 @@ export function createFakeFirestore(): FakeFirestore {
             if (dir === 'desc') matching.reverse();
             if (startAfter !== undefined) {
                 const base = orderField as string | null;
-                return matching.filter((d) => (base ? (d[base] as number | string) > startAfter : true));
+                return matching.filter((d) =>
+                    base ? (d[base] as number | string) > startAfter : true,
+                );
             }
             return matching;
         },
@@ -329,7 +340,9 @@ export function createFakeFirestore(): FakeFirestore {
         async listCollections(): Promise<unknown> {
             return [];
         },
-        async runTransaction<TResult>(fn: (txn: FirestoreTransaction) => Promise<TResult>): Promise<TResult> {
+        async runTransaction<TResult>(
+            fn: (txn: FirestoreTransaction) => Promise<TResult>,
+        ): Promise<TResult> {
             const txn = new FakeTransaction(owner);
             const result = await fn(txn);
             for (const op of txn.pending) {

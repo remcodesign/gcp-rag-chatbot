@@ -65,7 +65,10 @@ const DEFAULT_PARSER: SseParser = { parseSse };
  * @param deps injected dependencies (transport + optional parser).
  * @param options store options.
  */
-export function createChatStore(deps: { send: SendTransport; parser?: SseParser }, options: ChatStoreOptions = {}): ChatStore {
+export function createChatStore(
+    deps: { send: SendTransport; parser?: SseParser },
+    options: ChatStoreOptions = {},
+): ChatStore {
     const { send } = deps;
     const parser: SseParser = deps.parser ?? DEFAULT_PARSER;
     const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
@@ -204,7 +207,13 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
     }
 
     /** Sends a user message and drives the stream with reconnection (Step 6.3). */
-    async function sendMessage({ sessionId: sid, query: q }: { sessionId: string; query: string }): Promise<void> {
+    async function sendMessage({
+        sessionId: sid,
+        query: q,
+    }: {
+        sessionId: string;
+        query: string;
+    }): Promise<void> {
         sessionId = sid;
         query = q;
         state.status = 'streaming';
@@ -227,7 +236,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
             sources: [],
         });
 
-        for (; ;) {
+        for (;;) {
             const { ok } = await runStream();
             if (ok) return;
             if (getStatus() === STATUS.ERROR) return; // terminal error surfaced
@@ -247,7 +256,7 @@ export function createChatStore(deps: { send: SendTransport; parser?: SseParser 
         state.status = STATUS.STREAMING;
         state.error = null;
         state.retryCount = 0;
-        for (; ;) {
+        for (;;) {
             const { ok } = await runStream();
             if (ok) return;
             if (getStatus() === STATUS.ERROR) return;

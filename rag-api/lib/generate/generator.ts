@@ -15,12 +15,7 @@ import { readDelta } from './readDelta.js';
 import { validateCitations, listSources } from './citations.js';
 import type { Citation } from './citations.js';
 import { buildTrace } from './trace.js';
-import type {
-    Pipeline,
-    RunOutcome,
-    SourceInfo,
-    SourceMap,
-} from '../types/rag.js';
+import type { Pipeline, RunOutcome, SourceInfo, SourceMap } from '../types/rag.js';
 import type {
     AppLogger,
     ChatMessage,
@@ -41,11 +36,9 @@ export const STAGES = {
 export const SYSTEM_PROMPT =
     'You are a helpful assistant for Northwind Outfitters. Answer from the provided context. ' +
     'When you use a specific source, cite it inline as [Source N], where N is the number in the source list.' +
-
     'If you cannot answer from the context, say "I don\'t know" and do not make up an answer.' +
     'Do not cite sources that are not in the context.' +
     'Do not invent sources or fabricate citations. Or just new text outside the context.' +
-
     '! Output in the Dutch language.';
 
 /** Max conversation turns (user+assistant pairs) before the session ends. */
@@ -81,7 +74,11 @@ export interface GenerateOnceInput {
     sse?: Sse | null;
     messages: ChatMessage[];
     sourceMap: SourceMap;
-    request?: { model?: string | null; signal?: AbortSignal; reasoning?: Record<string, unknown> } | null;
+    request?: {
+        model?: string | null;
+        signal?: AbortSignal;
+        reasoning?: Record<string, unknown>;
+    } | null;
     onToken?: (out: TokenOutcome) => void;
 }
 
@@ -127,9 +124,9 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
     const normErr = bridge.normalizeError ?? normalizeError;
     const reader: { step: DeltaReader } = deps.reader ?? { step: readDelta };
     const logger: AppLogger = {
-        info: deps.logger?.info ?? (() => { }),
-        warn: deps.logger?.warn ?? (() => { }),
-        error: deps.logger?.error ?? (() => { }),
+        info: deps.logger?.info ?? (() => {}),
+        warn: deps.logger?.warn ?? (() => {}),
+        error: deps.logger?.error ?? (() => {}),
     };
     const maxRegenRetries = options.maxRegenRetries ?? DEFAULT_MAX_REGEN_RETRIES;
     const defaultReasoning = options.reasoning;
@@ -151,7 +148,8 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
 
         // Tokens are about to flow — make the stage explicit on the wire so the
         // frontend can leave "Selecting" and enter "Generating".
-        if (sse && !sse.isClosed()) sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.GENERATING, progress: 90 });
+        if (sse && !sse.isClosed())
+            sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.GENERATING, progress: 90 });
 
         const partial: string[] = [];
         const seen = new Set<number>();
@@ -163,7 +161,9 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
         for await (const chunk of stream) {
             // First (non-empty) content token marks the generation start -> TTFT.
             if (ttftMs === undefined && chunk?.usage === undefined) {
-                const probe: string = reader.step(chunk as ChatStreamChunk, { delta: 'choices.0.delta.content' });
+                const probe: string = reader.step(chunk as ChatStreamChunk, {
+                    delta: 'choices.0.delta.content',
+                });
                 if (probe.length > 0) ttftMs = Date.now() - genStart;
             }
             // Capture token usage from the final usage chunk (no content choice).
@@ -176,7 +176,9 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
                 };
             }
 
-            const token: string = reader.step(chunk as ChatStreamChunk, { delta: 'choices.0.delta.content' });
+            const token: string = reader.step(chunk as ChatStreamChunk, {
+                delta: 'choices.0.delta.content',
+            });
             if (!token) continue;
 
             const { citations: fresh } = validateCitations(token, sourceMap);
@@ -227,7 +229,11 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
         }));
         if (store && store.persistMessage) {
             try {
-                await store.persistMessage(sessionId, { role: 'user', content: query, complete: true });
+                await store.persistMessage(sessionId, {
+                    role: 'user',
+                    content: query,
+                    complete: true,
+                });
             } catch (err) {
                 const e = err as { message?: string };
                 logger.warn(`user message persist failed for ${sessionId}: ${e.message}`);
@@ -297,7 +303,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
         let tokensPerSecond: number | null = null;
 
         try {
-            for (; ;) {
+            for (;;) {
                 const msgs = attempt === 0 ? messages : buildRegenMessages(messages, partialText);
                 try {
                     const res = await generateOnce({
@@ -321,10 +327,16 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
                     break;
                 } catch (err) {
                     const e = normErr(err);
-                    logger.warn(`generation attempt ${attempt} failed for ${sessionId}: ${e.message}`);
+                    logger.warn(
+                        `generation attempt ${attempt} failed for ${sessionId}: ${e.message}`,
+                    );
                     if (attempt >= maxRegenRetries) throw err;
                     attempt += 1;
-                    sse.send(SSE_EVENT.PROGRESS, { stage: STAGES.GENERATION, progress: 80, note: 'regenerating' });
+                    sse.send(SSE_EVENT.PROGRESS, {
+                        stage: STAGES.GENERATION,
+                        progress: 80,
+                        note: 'regenerating',
+                    });
                 }
             }
             generationMs = Date.now() - genT0;
@@ -334,7 +346,16 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
             logger.error(`generation interrupted for ${sessionId}: ${e.message}`);
             if (options.trace) {
                 try {
-                    sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs, usage, ttftMs, tokensPerSecond }));
+                    sse.send(
+                        SSE_EVENT.TRACE,
+                        buildTrace(runOutcome, {
+                            messages,
+                            generation: generationMs,
+                            usage,
+                            ttftMs,
+                            tokensPerSecond,
+                        }),
+                    );
                 } catch (traceErr) {
                     const te = traceErr as { message?: string };
                     logger.warn(`trace serialization failed for ${sessionId}: ${te.message}`);
@@ -346,7 +367,16 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
 
         if (options.trace) {
             try {
-                sse.send(SSE_EVENT.TRACE, buildTrace(runOutcome, { messages, generation: generationMs, usage, ttftMs, tokensPerSecond }));
+                sse.send(
+                    SSE_EVENT.TRACE,
+                    buildTrace(runOutcome, {
+                        messages,
+                        generation: generationMs,
+                        usage,
+                        ttftMs,
+                        tokensPerSecond,
+                    }),
+                );
             } catch (err) {
                 const e = err as { message?: string };
                 logger.warn(`trace serialization failed for ${sessionId}: ${e.message}`);

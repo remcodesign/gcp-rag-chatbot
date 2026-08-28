@@ -79,10 +79,7 @@ export interface RunOutcome {
 
 /** The `pipeline.run` surface injected into the generator. */
 export interface Pipeline {
-    run(
-        query: string,
-        options?: { history?: ChatMessage[] },
-    ): Promise<RunOutcome>;
+    run(query: string, options?: { history?: ChatMessage[] }): Promise<RunOutcome>;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,10 +88,7 @@ export interface Pipeline {
 
 export interface Embedder {
     embed(text: string): Promise<number[]>;
-    embedBatch?(
-        texts: string[],
-        options?: { dimensions?: number },
-    ): Promise<number[][]>;
+    embedBatch?(texts: string[], options?: { dimensions?: number }): Promise<number[][]>;
 }
 
 /** A reranking function: given the query + hits, returns a re-ranked list. */

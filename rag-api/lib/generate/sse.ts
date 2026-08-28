@@ -105,5 +105,14 @@ export function createSse(res: SseResponse, options: SseOptions = {}): Sse {
         close();
     }
 
-    return { send, sendRaw, end, error, get nextId() { return nextId; }, isClosed };
+    return {
+        send,
+        sendRaw,
+        end,
+        error,
+        get nextId() {
+            return nextId;
+        },
+        isClosed,
+    };
 }

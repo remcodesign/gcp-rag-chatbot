@@ -63,7 +63,7 @@ not be reintroduced.
 - Keep `@typescript-eslint` + `vue-eslint-parser` in the flat ESLint config (required for `.ts` + `.vue` parsing).
 
 ## Terraform / deploy conventions
-- Use wrappers: `./tf.sh <cmd>` (fetch credentials, run in `infra/`) and `./deploy.sh [build|push|plan|apply]`. Never run `deploy.sh apply` yourself — it's interactive.
+- Use wrappers: `./tf.sh <cmd>` (fetch credentials, run in `infra/`) and `./deploy.sh [build|push|plan|apply|check|fix]`. Never run `deploy.sh apply` yourself — it's interactive.
 - Region must match in `variables.tf`, `tf.sh`, `deploy.sh`, AND the registry prefix, or image refs don't resolve.
 
 ## Gotchas (highest-frequency agent mistakes)
@@ -82,10 +82,20 @@ not be reintroduced.
 
 ## Quick references (canonical)
 ```bash
-# Type-checking + dead-code gate (all packages gated in deploy.sh):
+# Fast local loop — fix + verify (lint:fix + prettier, then typecheck/lint/knip/test), no build:
+./deploy.sh fix
+# Verify only (typecheck/lint/knip/test), no build, no fixes:
+./deploy.sh check
+
+# Per-package (all gated in deploy.sh):
 cd rag-api      && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
 cd rag-ingest   && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
 cd frontend   && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # strict TS (vue-tsc)
+
+# Formatting (Prettier, via eslint-config-prettier — formatting is Prettier's job, lint is ESLint's):
+npm run format          # prettier --write
+npm run format:check    # prettier --check
+npm run lint:fix        # eslint --fix
 
 ./deploy.sh build/push/plan     # build+push git-SHA tag; NEVER apply for the agent
 ./tf.sh plan                    # plan + HTML viewer (credentials via wrapper)

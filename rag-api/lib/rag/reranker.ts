@@ -20,10 +20,7 @@ export interface Reranker {
     rerank(query: string, hits: Hit[]): Promise<RerankResult>;
 }
 
-export function createReranker(
-    deps: RerankerDeps,
-    options: RerankerOptions = {},
-): Reranker {
+export function createReranker(deps: RerankerDeps, options: RerankerOptions = {}): Reranker {
     const rerankFn: RerankerFn = deps.reranker?.rerank ?? (async (_q: string, hits: Hit[]) => hits);
     const threshold = options.confidenceThreshold ?? 0.75;
     const timeoutMs = options.rerankTimeoutMs ?? 1500;
@@ -46,7 +43,9 @@ export function createReranker(
         return {
             hits: result.value,
             didRerank: !result.timedOut,
-            reason: result.timedOut ? 'rerank timed out; kept original order' : 'low confidence, ran rerank',
+            reason: result.timedOut
+                ? 'rerank timed out; kept original order'
+                : 'low confidence, ran rerank',
         };
     }
 

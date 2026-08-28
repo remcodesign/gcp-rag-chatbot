@@ -12,7 +12,18 @@ describe('normalizeTrace', () => {
     const fullTrace: RawTrace = {
         query: 'return policy',
         retrieved: [
-            { id: 'a', title: 'Return', url: '/a', score: 0.9, textPreview: '...', chars: 20, keptInContext: true, rank: 1, category: null, text: '' },
+            {
+                id: 'a',
+                title: 'Return',
+                url: '/a',
+                score: 0.9,
+                textPreview: '...',
+                chars: 20,
+                keptInContext: true,
+                rank: 1,
+                category: null,
+                text: '',
+            },
         ],
         rerank: { didRerank: false, reason: 'above threshold' },
         context: { sources: [{ n: 1, id: 'a' }], length: 10 },
@@ -102,7 +113,12 @@ describe('normalizeTrace usage + token-speed passthrough', () => {
         });
         expect(trace?.ttftMs).toBe(480);
         expect(trace?.tokensPerSecond).toBe(31.2);
-        expect(trace?.usage).toEqual({ promptTokens: 120, completionTokens: 42, totalTokens: 162, cost: 0.0001 });
+        expect(trace?.usage).toEqual({
+            promptTokens: 120,
+            completionTokens: 42,
+            totalTokens: 162,
+            cost: 0.0001,
+        });
     });
 
     it('defaults usage fields to safe nulls when absent', () => {
@@ -121,8 +137,21 @@ describe('normalizeTrace usage + token-speed passthrough', () => {
 
 describe('timingBars', () => {
     it('returns one row per stage plus E2E, with ms and a width proportional to the largest', () => {
-        const bars = timingBars({ embed: 100, retrieval: 50, rerank: 25, generation: 200, total: 375, e2e: 575 });
-        expect(bars.map((b) => b.label)).toEqual(['Embed', 'Retrieve', 'Rerank', 'Generate', 'E2E']);
+        const bars = timingBars({
+            embed: 100,
+            retrieval: 50,
+            rerank: 25,
+            generation: 200,
+            total: 375,
+            e2e: 575,
+        });
+        expect(bars.map((b) => b.label)).toEqual([
+            'Embed',
+            'Retrieve',
+            'Rerank',
+            'Generate',
+            'E2E',
+        ]);
         expect(bars.map((b) => b.ms)).toEqual([100, 50, 25, 200, 575]);
         // Largest is E2E (575ms) -> 100%; Generate is ~35%.
         expect(bars.find((b) => b.label === 'E2E')?.pct).toBe(100);
@@ -130,7 +159,13 @@ describe('timingBars', () => {
     });
 
     it('derives E2E from total + generation when e2e is absent', () => {
-        const bars = timingBars({ embed: 100, retrieval: 50, rerank: 25, generation: 200, total: 375 });
+        const bars = timingBars({
+            embed: 100,
+            retrieval: 50,
+            rerank: 25,
+            generation: 200,
+            total: 375,
+        });
         expect(bars.find((b) => b.label === 'E2E')?.ms).toBe(575);
     });
 

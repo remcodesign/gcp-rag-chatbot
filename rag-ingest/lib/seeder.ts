@@ -35,15 +35,19 @@ type EmbedError = Error & { code?: string };
 export async function writeTextFields(firestore: Firestore, chunks: Chunk[]): Promise<void> {
     const batch = firestore.batch();
     for (const chunk of chunks) {
-        batch.set(firestore.collection('chunks').doc(chunk.id), {
-            sourceId: chunk.sourceId,
-            category: chunk.category,
-            title: chunk.title,
-            url: chunk.url,
-            index: chunk.index,
-            text: chunk.text,
-            tags: chunk.tags,
-        }, { merge: true });
+        batch.set(
+            firestore.collection('chunks').doc(chunk.id),
+            {
+                sourceId: chunk.sourceId,
+                category: chunk.category,
+                title: chunk.title,
+                url: chunk.url,
+                index: chunk.index,
+                text: chunk.text,
+                tags: chunk.tags,
+            },
+            { merge: true },
+        );
     }
     await batch.commit();
 }

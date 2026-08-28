@@ -51,7 +51,10 @@ describe('Step 4.1 — source corpus (front-matter parsing)', () => {
 
     it('parses an optional tags key and defaults to empty when absent', () => {
         expect(parseTags('hoofdlamp, koplamp,  lamp ,, verlichting')).toEqual([
-            'hoofdlamp', 'koplamp', 'lamp', 'verlichting',
+            'hoofdlamp',
+            'koplamp',
+            'lamp',
+            'verlichting',
         ]);
         expect(parseTags(undefined)).toEqual([]);
         expect(parseTags('')).toEqual([]);
@@ -164,16 +167,18 @@ describe('Step 4.4 — write Location 1 then embed + Location 2', () => {
 
     it('writes the stored text unchanged (no tag prefix) — citations stay intact', async () => {
         const fs = createFakeFirestore();
-        await writeTextFields(fs, [{
-            index: 0,
-            id: 'abc',
-            sourceId: 's1',
-            category: 'product',
-            title: 'T',
-            url: '/t',
-            tags: ['hoofdlamp'],
-            text: 'De Poolster is een koplamp.',
-        }]);
+        await writeTextFields(fs, [
+            {
+                index: 0,
+                id: 'abc',
+                sourceId: 's1',
+                category: 'product',
+                title: 'T',
+                url: '/t',
+                tags: ['hoofdlamp'],
+                text: 'De Poolster is een koplamp.',
+            },
+        ]);
         const doc = fs.store.get('chunks\u0000abc');
         // The stored `text` is the pure body, NOT the tag-prefixed embed input.
         expect(doc?.text).toBe('De Poolster is een koplamp.');
@@ -208,9 +213,15 @@ describe('Step 4.4 — write Location 1 then embed + Location 2', () => {
     it('is idempotent end-to-end: second run skips (already seeded)', async () => {
         const fsLocal = createFakeFirestore();
         const embed = stubEmbedder();
-        await runSeed({ firestore: fsLocal, embeddings: embed }, { sources: [{ id: 's1', content: SAMPLE }] });
+        await runSeed(
+            { firestore: fsLocal, embeddings: embed },
+            { sources: [{ id: 's1', content: SAMPLE }] },
+        );
         const before = fsLocal.store.size;
-        const res2 = await runSeed({ firestore: fsLocal, embeddings: embed }, { sources: [{ id: 's1', content: SAMPLE }] });
+        const res2 = await runSeed(
+            { firestore: fsLocal, embeddings: embed },
+            { sources: [{ id: 's1', content: SAMPLE }] },
+        );
         expect(res2.status).toBe('already-seeded');
         expect(fsLocal.store.size).toBe(before); // no additional writes
     });
@@ -219,12 +230,15 @@ describe('Step 4.4 — write Location 1 then embed + Location 2', () => {
 describe('Step 4.5 — manifest finalization', () => {
     it('writes a manifest with the final chunk count', async () => {
         const fs = createFakeFirestore();
-        await runSeed({ firestore: fs, embeddings: stubEmbedder() }, {
-            sources: [
-                { id: 'a', content: SAMPLE },
-                { id: 'b', content: SAMPLE },
-            ]
-        });
+        await runSeed(
+            { firestore: fs, embeddings: stubEmbedder() },
+            {
+                sources: [
+                    { id: 'a', content: SAMPLE },
+                    { id: 'b', content: SAMPLE },
+                ],
+            },
+        );
         const manifest = await readManifest(fs);
         expect(manifest?.version).toBe(CURRENT_VERSION);
         expect((manifest as ManifestSummary | null)?.chunkCount ?? 0).toBeGreaterThan(0);
@@ -242,7 +256,10 @@ describe('Step 4.5 — manifest finalization', () => {
             },
         };
         await expect(
-            runSeed({ firestore: fs, embeddings: broken }, { sources: [{ id: 's1', content: SAMPLE }] }),
+            runSeed(
+                { firestore: fs, embeddings: broken },
+                { sources: [{ id: 's1', content: SAMPLE }] },
+            ),
         ).rejects.toThrow('boom');
     });
 });

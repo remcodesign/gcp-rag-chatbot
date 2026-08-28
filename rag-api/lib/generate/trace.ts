@@ -33,8 +33,8 @@ export function serializeHit(
         typeof hit.similarityScore === 'number'
             ? hit.similarityScore
             : typeof hit.distance === 'number'
-                ? 1 - hit.distance
-                : null;
+              ? 1 - hit.distance
+              : null;
 
     return {
         id: hit.id,
@@ -88,12 +88,12 @@ export function buildTrace(
 
     const timings = outcome.timings
         ? {
-            ...outcome.timings,
-            ...(typeof generation === 'number' ? { generation } : {}),
-            ...(typeof generation === 'number' && typeof outcome.timings.total === 'number'
-                ? { e2e: outcome.timings.total + generation }
-                : {}),
-        }
+              ...outcome.timings,
+              ...(typeof generation === 'number' ? { generation } : {}),
+              ...(typeof generation === 'number' && typeof outcome.timings.total === 'number'
+                  ? { e2e: outcome.timings.total + generation }
+                  : {}),
+          }
         : null;
 
     const payload: TracePayload = {
@@ -109,7 +109,9 @@ export function buildTrace(
     };
 
     if (outcome.error) {
-        payload.error = { message: String(outcome.error.message || 'retrieval failed').slice(0, 300) };
+        payload.error = {
+            message: String(outcome.error.message || 'retrieval failed').slice(0, 300),
+        };
     }
 
     if (messages) {

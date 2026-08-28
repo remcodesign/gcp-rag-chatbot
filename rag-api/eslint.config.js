@@ -5,6 +5,7 @@
 import js from '@eslint/js';
 import tsParser from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
+import prettier from 'eslint-config-prettier';
 
 export default [
   { ignores: ['node_modules/**', 'coverage/**', 'dist/**'] },
@@ -100,4 +101,9 @@ export default [
       '@typescript-eslint/no-unused-vars': 'off',
     },
   },
+
+  // Prettier integration: turn OFF ESLint rules that conflict with Prettier.
+  // Must be LAST so it overrides the rules above. Formatting is Prettier's job
+  // (npm run format); ESLint handles correctness/lint rules.
+  prettier,
 ];

@@ -1,64 +1,72 @@
 ---
 name: build-tooling-strict-ts
-description: "Use when wiring build-time correctness into a multi-package app: strict TypeScript (or type-checked JS), ESLint, a startup import smoke test, utility-first styling, and a deploy gate that runs typecheck → lint → smoke → test → build before any image push."
+description: "Use when wiring build-time correctness into a multi-package app: 100% strict TypeScript, ESLint flat config, Prettier via eslint-config-prettier, a knip dead-code gate, and a deploy gate that runs typecheck → lint → knip → test → build before any image push."
 argument-hint: "Describe the type-checking, linting, styling, or deploy-gate tooling you need to add."
 ---
 
-# Build Tooling: TypeScript + ESLint + Styling + Deploy Gate
+# Build Tooling: TypeScript + ESLint + Prettier + Knip + Deploy Gate
 
 Use this skill to add a **developer-experience / correctness layer** across every
 app package so a broken export fails **CI**, never a running container. It exists
 because plain-JS is fragile: an unterminated doc comment can swallow an `export`,
 and a test runner that only transforms test files can pass while a module fails to
-import. The fix is build-time type safety, linting, a startup import-resolution
-guard, and a consistent styling approach — all wired into the same pipeline that
-gates deployment.
+import. The fix is build-time type safety, linting, a dead-code gate, formatting,
+and a consistent styling approach — all wired into the same pipeline that gates
+deployment.
 
 ## Locked decisions
-- **Frontend = 100% strict TypeScript** (no `.js`, no `any`), type-checked by
-  `vue-tsc --noEmit`; ESLint enforces `no-explicit-any: error`.
-- **Node packages type-checked as JavaScript** with `tsc --noEmit` + `checkJs` — a
-  module/export-resolution gate, not a rewrite. (Or, if fully migrated, strict TS
-  compiled via `tsconfig.build.json`.)
+- **All packages = 100% strict TypeScript** (no `.js`, no `any`), type-checked by
+  `tsc --noEmit` (Node) / `vue-tsc --noEmit` (frontend); ESLint enforces
+  `no-explicit-any: error`.
 - **Lint** backend + frontend with ESLint flat config.
-- **A startup import smoke test** for Node packages (they ship raw JS, no bundler);
-  the **frontend uses its bundler build** as the resolve guard.
+- **Formatting** via Prettier, wired in with `eslint-config-prettier` (formatting
+  is Prettier's job, lint is ESLint's — no rule duplication).
+- **Dead-code gate** via `knip` (unused exports/files/deps that `tsc`/ESLint
+  can't see). See the `dead-code-knip` skill for settings.
+- **The compile step IS the resolve guard** — `tsc -p tsconfig.build.json` /
+  `vite build` fails on a dangling import/export. No separate smoke script.
 - **Utility-first styling** (e.g. Tailwind) for the frontend; scoped CSS only where
   utilities can't reach (e.g. runtime-generated HTML).
-- **Wire checks into the deploy pipeline** — typecheck → lint → smoke → test →
+- **Wire checks into the deploy pipeline** — typecheck → lint → knip → test →
   build, before any image push.
-- **No new runtime deps** — TS/ESLint/styling are dev/build-time only.
+- **No new runtime deps** — TS/ESLint/Prettier/knip are dev/build-time only.
 
 ## The regression it prevents
 ```mermaid
 sequenceDiagram
   participant D as dev
   participant G as deploy gate
-  participant S as smoke
+  participant B as build
   participant C as Cloud Run
   Note over D: doc comment swallows export function foo
   D->>G: ./deploy.sh build
-  G->>S: npm run smoke
-  S-->>G: ERR_MODULE_NOT_FOUND exit 1
+  G->>B: npm run build (tsc / vite)
+  B-->>G: TS2305 / ERR_MODULE_NOT_FOUND exit 1
   G-->>D: build aborts before push
   Note over C: container never starts broken
 ```
 
 ## The steps
-1. **Type-checking** — Node packages: `tsconfig.json` with `checkJs`, `NodeNext`,
-   `noEmit`; `npm run typecheck` (`tsc --noEmit`). Frontend: strict `.ts` +
-   `vue-tsc --noEmit` + a `types/` folder (one file per type-set, no barrel).
+1. **Type-checking** — all packages strict TS: `tsconfig.json` with `strict:true`,
+   `noImplicitAny`, `verbatimModuleSyntax`, `noEmit`; `npm run typecheck`
+   (`tsc --noEmit` / `vue-tsc --noEmit`). Frontend keeps a `types/` folder (one
+   file per type-set, no barrel).
 2. **ESLint** — `eslint.config.js` per package (`@eslint/js` + node/browser
    globals; frontend adds `@typescript-eslint` + `vue-eslint-parser`, enforces
    `no-explicit-any`). Test-file carve-out for vitest globals.
-3. **Startup/import smoke test** — `scripts/smoke.js` in the Node packages imports
-   every entrypoint into a real ESM graph; the frontend uses its bundler build as
-   the resolve guard (no separate smoke script).
-4. **Styling** — utility-first CSS (e.g. `@import 'tailwindcss'` + theme tokens +
+3. **Prettier** — `.prettierrc.json` per package + `eslint-config-prettier` as the
+   LAST config in the flat array (turns off conflicting rules). Scripts:
+   `format` (`prettier --write`), `format:check` (`prettier --check`).
+4. **Dead-code gate** — `knip` (`npm run knip`, config in `knip.json`). Runs in
+   the check chain (full source + tests), NOT inside `npm run build` (the Docker
+   build has no tests, so knip would misreport dev-only deps/test-only exports).
+5. **Styling** — utility-first CSS (e.g. `@import 'tailwindcss'` + theme tokens +
    base reset); all component styling as utilities in the templates; a small
    scoped style for runtime-generated HTML.
-5. **Wire checks into deploy** — the deploy wrapper's `run_checks` runs
-   typecheck → lint → smoke → test → build before any image push.
+6. **Wire checks into deploy** — the deploy wrapper's `run_checks` runs
+   typecheck → lint → knip → test → build before any image push. Fast local
+   loops without the Docker build: `./deploy.sh check` (verify only) and
+   `./deploy.sh fix` (lint:fix + prettier, then verify).
 
 ## Test coverage (happy + non-happy)
 The gate is **not** a unit-test suite — it is a set of build-time checks, each with
@@ -67,31 +75,22 @@ a happy and a non-happy path:
   export/import is a reported error (proven by removing an `export`).
 - **lint** — happy: zero errors. Non-happy: an unused/undefined name, or (frontend)
   an explicit `any`, fails the run.
-- **smoke** — happy: all Node entrypoints import, exit 0. Non-happy: a missing
-  export exits 1. The frontend has no smoke script — its bundler build is the
-  resolve-time guard.
+- **knip** — happy: no unused exports/files/deps. Non-happy: a dead export fails
+  the run. See the `dead-code-knip` skill for settings.
 - **build** — happy: emits styled CSS + the UI renders. Non-happy: a mistyped
   directive or a missing export fails the build.
 
 ## Non-obvious notes / gotchas
-- **`tsc` on Node packages is a *module/export* gate, not a full strict-type
-  gate.** The Node codebase uses factory-via-DI (factories return plain objects,
-  callbacks untyped). Full `strict:true` + `checkJs` surfaces many "implicitly any"
-  diagnostics that are **not** the bug class this gate targets. Keep `checkJs` +
-  `NodeNext` (so unresolved imports/exports are compile errors) but leave
-  `noImplicitAny` off. **This is deliberately different from the frontend**, which
-  is 100% strict TS.
-- **Frontend is 100% strict TypeScript; Node is type-checked JS.** All frontend
-  source + tests are `.ts`; Node packages stay `.js` but pass through `tsc
-  --noEmit` + `checkJs` as a type-checking layer.
-- **Pin the TypeScript version.** Newer TS lines can report implicit-`any`
-  regardless of `noImplicitAny`, which would make the gate unusable on plain-JS
-  Node code. Pin to a version that restores the intended semantics.
-- **Smoke test is the Node-package guard; the bundler build is the frontend's.**
-  Node packages ship raw JS (no bundler), so `tsc` doesn't build them — the smoke
-  test (which imports every entrypoint into a real ESM graph) is the only
-  resolve-time guard. The frontend has a bundler, so its build resolves the whole
-  entry graph and fails on a broken import.
+- **The compile step is the module/export resolve guard.** `tsc -p
+  tsconfig.build.json` (Node) and `vite build` (frontend) resolve the whole
+  entry graph and fail on a broken import/export before any image push. No
+  standalone smoke script is needed for strict-TS packages.
+- **`knip` runs in the check chain, not inside `npm run build`.** The Docker
+  build only copies `lib`/`src` (no tests), so knip would flag dev-only deps and
+  test-only exports as unused there. Run it where the full source + tests exist.
+- **`eslint-config-prettier` must be the LAST config** in the flat array so it
+  overrides any ESLint rules that conflict with Prettier. Formatting is
+  Prettier's job; ESLint handles correctness/lint rules.
 - **ESLint test-file carve-out.** Test files use vitest globals and intentionally
   import helpers; turn `no-unused-vars`/`no-undef` off for tests so lint stays
   green.
@@ -108,16 +107,21 @@ a happy and a non-happy path:
 
 ## Verification
 ```bash
-# Per package — Node packages run the smoke script; the frontend relies on its build:
-cd api       && npm run typecheck && npm run lint && npm run smoke && npm test
-cd ingest    && npm run typecheck && npm run lint && npm run smoke && npm test
-cd frontend  && npm run typecheck && npm run lint && npm test && npm run build
+# Fast local loop — fix + verify all packages (no Docker build):
+./deploy.sh fix          # lint:fix + prettier, then typecheck/lint/knip/test
+./deploy.sh check        # verify only (typecheck/lint/knip/test)
+
+# Per package (all strict TS — build IS the resolve guard):
+cd api       && npm run typecheck && npm run lint && npm run knip && npm test && npm run build
+cd ingest    && npm run typecheck && npm run lint && npm run knip && npm test && npm run build
+cd frontend  && npm run typecheck && npm run lint && npm run knip && npm test && npm run build
 
 # The deploy gate — runs all of the above before any image push:
 bash -n deploy.sh        # syntax check
 ./deploy.sh build        # runs run_checks for all packages, then builds images
 ```
 > **Regression proof (the point of this skill).** Removing an `export` from a Node
-> package makes `npm run smoke` exit 1 with `ERR_MODULE_NOT_FOUND`; removing an
-> `export` from the frontend makes its build fail. In every case the build aborts
-> **before** any image is pushed or a container starts.
+> package makes `npm run build` (`tsc -p tsconfig.build.json`) exit 1 with
+> `TS2305`/`ERR_MODULE_NOT_FOUND`; removing an `export` from the frontend makes its
+> build fail. In every case the build aborts **before** any image is pushed or a
+> container starts.

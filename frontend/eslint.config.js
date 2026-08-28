@@ -3,6 +3,7 @@ import js from '@eslint/js';
 import vueParser from 'vue-eslint-parser';
 import ts from '@typescript-eslint/parser';
 import tsPlugin from '@typescript-eslint/eslint-plugin';
+import prettier from 'eslint-config-prettier';
 
 const tsPluginConfig = { '@typescript-eslint': tsPlugin };
 
@@ -104,4 +105,9 @@ export default [
       'no-useless-assignment': 'off',
     },
   },
+
+  // Prettier integration: turn OFF ESLint rules that conflict with Prettier.
+  // Must be LAST so it overrides the rules above (applies to .vue + .ts).
+  // Formatting is Prettier's job (npm run format); ESLint handles lint rules.
+  prettier,
 ];

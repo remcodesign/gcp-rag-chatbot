@@ -14,6 +14,8 @@
 #   ./deploy.sh push            # build + push all images
 #   ./deploy.sh plan            # build+push, then ./tf.sh plan
 #   ./deploy.sh apply           # build+push, then ./tf.sh apply (interactive)
+#   ./deploy.sh check           # typecheck+lint+knip+test for all packages (no build)
+#   ./deploy.sh fix             # eslint --fix + prettier format, then check (no build)
 #
 # Notes:
 #   - Uses a Linux/amd64 platform so the images match Cloud Run's runtime.
@@ -129,6 +131,32 @@ push_all() {
   build_all
 }
 
+# Run the full tooling gate (typecheck -> lint -> knip -> test) for every
+# package WITHOUT building images or running the slow Docker build. Fast
+# feedback loop for "is everything green?".
+check_all() {
+  run_checks rag-api 0
+  run_checks rag-ingest 0
+  run_checks frontend 0
+}
+
+# Apply automatic fixes (ESLint --fix + Prettier format) to every package, then
+# run the full check gate (typecheck -> lint -> knip -> test) to confirm the
+# fixes didn't break anything. No build, no image push.
+#
+# Output is compact: only real changes and errors are shown. Prettier's
+# per-file "(unchanged)" lines and ESLint's quiet success are suppressed.
+fix_all() {
+  for dir in rag-api rag-ingest frontend; do
+    echo "==> Fix: ${dir}"
+    # ESLint --fix: only print files it actually changed (--quiet hides warnings).
+    ( cd "$ROOT/$dir" && npm run lint:fix -- --quiet ) || true
+    # Prettier --write: only print files that changed (grep out "(unchanged)").
+    ( cd "$ROOT/$dir" && npm run format 2>&1 | grep -v '(unchanged)' ) || true
+  done
+  check_all
+}
+
 echo "Using image tag: ${IMAGE_TAG}"
 
 case "${1:-build}" in
@@ -136,5 +164,7 @@ case "${1:-build}" in
   push)   push_all ;;
   plan)   push_all; (cd "$ROOT" && ./tf.sh plan) ;;
   apply)  push_all; (cd "$ROOT" && ./tf.sh apply) ;;
-  *)      echo "usage: $0 {build|push|plan|apply}" >&2; exit 2 ;;
+  check)  check_all ;;
+  fix)    fix_all ;;
+  *)      echo "usage: $0 {build|push|plan|apply|check|fix}" >&2; exit 2 ;;
 esac

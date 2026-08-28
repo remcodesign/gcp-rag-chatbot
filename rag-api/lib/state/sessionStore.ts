@@ -26,11 +26,7 @@ import {
 } from './constants.js';
 import { SessionNotFoundError, SessionClosedError, InvalidEventError } from './errors.js';
 import type { SourceInfo } from '../types/rag.js';
-import type {
-    Firestore,
-    FirestoreDocumentData,
-    FirestoreTransaction,
-} from '../types/firestore.js';
+import type { Firestore, FirestoreDocumentData, FirestoreTransaction } from '../types/firestore.js';
 
 // ---------------------------------------------------------------------------
 // Document / API types
@@ -82,10 +78,7 @@ export interface StateStore {
     createSession(input: { sessionId: string; userId: string }): Promise<SessionDoc>;
     getSession(sessionId: string): Promise<SessionDoc | null>;
     closeSession(sessionId: string): Promise<{ sessionId: string; status: SessionStatus }>;
-    extendSession(
-        sessionId: string,
-        lastEventId?: number | null,
-    ): Promise<{ sessionId: string }>;
+    extendSession(sessionId: string, lastEventId?: number | null): Promise<{ sessionId: string }>;
     appendEvent(sessionId: string, event: AppendEventInput): Promise<string>;
     appendEvents(sessionId: string, events: AppendEventInput[]): Promise<string[]>;
     listEventsAfter(sessionId: string, afterSeq?: number): Promise<EventRecord[]>;
@@ -233,13 +226,14 @@ export function createStateStore(
         });
     }
 
-    async function listEventsAfter(sessionId: string, afterSeq = NO_EVENT_ID): Promise<EventRecord[]> {
+    async function listEventsAfter(
+        sessionId: string,
+        afterSeq = NO_EVENT_ID,
+    ): Promise<EventRecord[]> {
         const col = eventsColRef(sessionId);
         const query = col.orderBy('seq', 'asc').startAfter(afterSeq);
         const snap = await query.get();
-        return snap.docs
-            .map((d) => d.data())
-            .filter((d): d is EventRecord => d != null);
+        return snap.docs.map((d) => d.data()).filter((d): d is EventRecord => d != null);
     }
 
     async function persistMessage(
@@ -269,9 +263,7 @@ export function createStateStore(
 
     async function listMessages(sessionId: string): Promise<MessageRecord[]> {
         const snap = await messagesColRef(sessionId).orderBy('createdAt', 'asc').get();
-        return snap.docs
-            .map((d) => d.data())
-            .filter((d): d is MessageRecord => d != null);
+        return snap.docs.map((d) => d.data()).filter((d): d is MessageRecord => d != null);
     }
 
     return {

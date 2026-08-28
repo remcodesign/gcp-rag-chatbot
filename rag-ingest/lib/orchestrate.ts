@@ -39,7 +39,10 @@ export interface RunSeedOptions {
  * @param options `{ sources?, batchSize = 32, currentVersion = CURRENT_VERSION, log? }`.
  * @returns `{ status: 'seeded'|'already-seeded', chunkCount, skipped }`.
  */
-export async function runSeed(deps: RunSeedDeps, options: RunSeedOptions = {}): Promise<SeedResult> {
+export async function runSeed(
+    deps: RunSeedDeps,
+    options: RunSeedOptions = {},
+): Promise<SeedResult> {
     const { firestore, embeddings } = deps;
     const log = options.log ?? ((line: string) => console.log(line));
     const batchSize = options.batchSize ?? 32;

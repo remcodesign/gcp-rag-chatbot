@@ -20,9 +20,8 @@ import type { Source } from '../types/sse';
  * @returns sanitized HTML with citation spans.
  */
 export function renderAnswer(text = '', deps?: MarkdownDeps): string {
-    const html = deps && (deps.parse || deps.sanitize)
-        ? renderMarkdown(text, deps)
-        : renderMarkdown(text);
+    const html =
+        deps && (deps.parse || deps.sanitize) ? renderMarkdown(text, deps) : renderMarkdown(text);
     return html.replace(/\[Source (\d+)\]/g, '<span class="citation">[Source $1]</span>');
 }
 

@@ -22,7 +22,15 @@ import type { ParsedSource } from './types/corpus.js';
 
 /** Result of parsing a single source file (success or failure). */
 export type ParseResult =
-    | { ok: true; id: string; category: string; title: string; url: string; tags: string[]; body: string }
+    | {
+          ok: true;
+          id: string;
+          category: string;
+          title: string;
+          url: string;
+          tags: string[];
+          body: string;
+      }
     | { ok: false; reason: string };
 
 /** Required front-matter keys. A file missing any of these is skipped (logged). */
@@ -38,7 +46,10 @@ export function parseKeyValue(line: string): { key: string; value: string } | nu
     if (idx === -1) return null;
     const key = line.slice(0, idx).trim();
     let value = line.slice(idx + 1).trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+    if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+    ) {
         value = value.slice(1, -1);
     }
     return { key, value };

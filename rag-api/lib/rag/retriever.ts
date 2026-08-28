@@ -79,10 +79,13 @@ export function createRetriever(deps: RetrieverDeps, options: RetrieverOptions =
         queryVector: number[],
         opts: RetrieveOptions = {},
     ): Promise<Hit[]> {
-        const result = await withSoftTimeout(() => semaphore.run(() => retrieve(queryVector, opts)), {
-            timeoutMs: opts.timeoutMs ?? retrieveTimeoutMs,
-            fallback: [],
-        });
+        const result = await withSoftTimeout(
+            () => semaphore.run(() => retrieve(queryVector, opts)),
+            {
+                timeoutMs: opts.timeoutMs ?? retrieveTimeoutMs,
+                fallback: [],
+            },
+        );
         return result.value;
     }
 

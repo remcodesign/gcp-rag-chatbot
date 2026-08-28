@@ -31,7 +31,9 @@ describe('renderMarkdown — browser-like DOM (real DOMPurify + marked)', () => 
         const dom = new JSDOM('<!doctype html><html><body></body></html>');
         const { default: DOMPurify } = await import('dompurify');
         // dompurify's v3 factory takes a `WindowLike` root directly (not `{window}`).
-        const purify = DOMPurify(dom.window as unknown as NonNullable<Parameters<typeof DOMPurify>[0]>);
+        const purify = DOMPurify(
+            dom.window as unknown as NonNullable<Parameters<typeof DOMPurify>[0]>,
+        );
 
         const html = renderMarkdown(
             '### Returns\n\nYou can **return** within 30 days.\n\n- one\n- two\n\n<script>alert(1)</script>',

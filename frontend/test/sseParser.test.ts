@@ -6,7 +6,11 @@ describe('sseParser', () => {
         const raw = 'id: 3\nevent: token\ndata: {"text":"Hello","citations":[]}\n\n';
         const { frames, rest } = parseSse(raw);
         expect(frames).toHaveLength(1);
-        expect(frames[0]).toEqual({ id: 3, event: 'token', data: { text: 'Hello', citations: [] } });
+        expect(frames[0]).toEqual({
+            id: 3,
+            event: 'token',
+            data: { text: 'Hello', citations: [] },
+        });
         expect(rest).toBe('');
     });
 

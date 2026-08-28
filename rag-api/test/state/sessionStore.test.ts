@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { createStateStore } from '../../lib/state/sessionStore.js';
 import type { StateStore } from '../../lib/state/sessionStore.js';
 import { SESSION_STATUS, EVENT_TYPE, NO_EVENT_ID } from '../../lib/state/constants.js';
-import { SessionNotFoundError, SessionClosedError, InvalidEventError } from '../../lib/state/errors.js';
+import {
+    SessionNotFoundError,
+    SessionClosedError,
+    InvalidEventError,
+} from '../../lib/state/errors.js';
 import { createFakeFirestore } from '../fakes/fakeFirestore.js';
 import type { FakeFirestore } from '../fakes/fakeFirestore.js';
 
@@ -83,8 +87,14 @@ describe('Step 2.1 — Firestore client and schema', () => {
         it('assigns monotonic seq ids and bumps eventSeq atomically', async () => {
             const { store } = makeStore();
             await store.createSession({ sessionId: SID, userId: UID });
-            const a = await store.appendEvent(SID, { type: EVENT_TYPE.PROGRESS, payload: { stage: 'retrieval', progress: 40 } });
-            const b = await store.appendEvent(SID, { type: EVENT_TYPE.PROGRESS, payload: { stage: 'rerank', progress: 70 } });
+            const a = await store.appendEvent(SID, {
+                type: EVENT_TYPE.PROGRESS,
+                payload: { stage: 'retrieval', progress: 40 },
+            });
+            const b = await store.appendEvent(SID, {
+                type: EVENT_TYPE.PROGRESS,
+                payload: { stage: 'rerank', progress: 70 },
+            });
             expect(a).toBe('000001');
             expect(b).toBe('000002');
             const s = await store.getSession(SID);
@@ -143,7 +153,10 @@ describe('Step 2.2 — Reconnection / resume logic', () => {
     it('dedupes an already-sent event id — replay starts after the acknowledged seq', async () => {
         const { store } = makeStore();
         await store.createSession({ sessionId: SID, userId: UID });
-        await store.appendEvent(SID, { type: EVENT_TYPE.TOKEN, payload: { text: 'dup-suspected' } });
+        await store.appendEvent(SID, {
+            type: EVENT_TYPE.TOKEN,
+            payload: { text: 'dup-suspected' },
+        });
         const replayed = await store.listEventsAfter(SID, 1);
         expect(replayed).toEqual([]);
     });
@@ -151,7 +164,10 @@ describe('Step 2.2 — Reconnection / resume logic', () => {
     it('replays everything when the client reconnects from the start', async () => {
         const { store } = makeStore();
         await store.createSession({ sessionId: SID, userId: UID });
-        await store.appendEvent(SID, { type: EVENT_TYPE.PROGRESS, payload: { stage: 'retrieval' } });
+        await store.appendEvent(SID, {
+            type: EVENT_TYPE.PROGRESS,
+            payload: { stage: 'retrieval' },
+        });
         const replayed = await store.listEventsAfter(SID, NO_EVENT_ID);
         expect(replayed).toHaveLength(1);
     });
@@ -169,7 +185,10 @@ describe('Step 2.3 — Session TTL / cleanup', () => {
     it('does not expire an active streaming session — active guard still writes events', async () => {
         const { store } = makeStore();
         await store.createSession({ sessionId: SID, userId: UID });
-        const id = await store.appendEvent(SID, { type: EVENT_TYPE.TOKEN, payload: { text: 'still streaming' } });
+        const id = await store.appendEvent(SID, {
+            type: EVENT_TYPE.TOKEN,
+            payload: { text: 'still streaming' },
+        });
         expect(id).toBe('000001');
         expect((await store.getSession(SID))?.status).toBe('active');
     });
@@ -188,7 +207,10 @@ describe('Step 2.1 — messages', () => {
         });
         expect(msg.complete).toBe(true);
         const read = await store.getMessage(SID, 'm1');
-        expect(read).toMatchObject({ role: 'assistant', content: 'You can return within 30 days.' });
+        expect(read).toMatchObject({
+            role: 'assistant',
+            content: 'You can return within 30 days.',
+        });
         expect(read?.sources[0]?.id).toBe('faq-returns-01');
     });
 

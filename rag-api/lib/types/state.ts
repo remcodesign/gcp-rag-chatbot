@@ -18,6 +18,14 @@ export interface StateStoreLike {
         },
     ): Promise<unknown>;
     listMessages?(sessionId: string): Promise<
-        Array<{ id: string; role: 'assistant' | 'user'; content: string; sources: SourceInfo[]; complete: boolean; createdAt: number; updatedAt: number }>
+        Array<{
+            id: string;
+            role: 'assistant' | 'user';
+            content: string;
+            sources: SourceInfo[];
+            complete: boolean;
+            createdAt: number;
+            updatedAt: number;
+        }>
     >;
 }

@@ -99,7 +99,10 @@ describe('Step 3.3 — soft timeout + concurrency limiting', () => {
         const slowEmbed: Embedder = {
             embed: () => new Promise((resolve) => setTimeout(() => resolve([1, 0, 0]), 50)),
         };
-        const boundedRetriever = createRetriever({ firestore: fsLocal, embeddings: slowEmbed }, { limit: 5 });
+        const boundedRetriever = createRetriever(
+            { firestore: fsLocal, embeddings: slowEmbed },
+            { limit: 5 },
+        );
         const res = await withSoftTimeout(() => boundedRetriever.embedAndRetrieve('return'), {
             timeoutMs: 1000,
             fallback: { hits: [], timedOut: true, reason: null },
@@ -129,7 +132,13 @@ describe('Step 3.3 — soft timeout + concurrency limiting', () => {
 describe('Step 3.4 — dynamic reranking (conditional skip)', () => {
     it('skips rerank when top similarity is above threshold (latency saved)', async () => {
         const reranker = createReranker(
-            { reranker: { rerank: async () => { throw new Error('should not be called'); } } },
+            {
+                reranker: {
+                    rerank: async () => {
+                        throw new Error('should not be called');
+                    },
+                },
+            },
             { confidenceThreshold: 0.8 },
         );
         const hits = [
@@ -168,8 +177,20 @@ describe('Step 3.4 — dynamic reranking (conditional skip)', () => {
 describe('Step 3.5 — context + source map construction', () => {
     it('builds a prompt with numbered sources', () => {
         const hits = [
-            { id: 'a', title: 'Return', url: '/a', text: 'You can return within 30 days.', similarityScore: 0.9 },
-            { id: 'b', title: 'Warranty', url: '/b', text: 'The warranty covers defects.', similarityScore: 0.7 },
+            {
+                id: 'a',
+                title: 'Return',
+                url: '/a',
+                text: 'You can return within 30 days.',
+                similarityScore: 0.9,
+            },
+            {
+                id: 'b',
+                title: 'Warranty',
+                url: '/b',
+                text: 'The warranty covers defects.',
+                similarityScore: 0.7,
+            },
         ];
         const { context, sourceMap, sources } = buildContext(hits);
         expect(context).toContain('[Source 1]');
@@ -180,9 +201,21 @@ describe('Step 3.5 — context + source map construction', () => {
 
     it('omits empty or low-relevance docs from context', () => {
         const hits = [
-            { id: 'a', title: 'Good', url: '/a', text: 'A longer relevant document text here for the demo.', similarityScore: 0.95 },
+            {
+                id: 'a',
+                title: 'Good',
+                url: '/a',
+                text: 'A longer relevant document text here for the demo.',
+                similarityScore: 0.95,
+            },
             { id: 'b', title: 'Short', url: '/b', text: 'too short', similarityScore: 0.9 },
-            { id: 'c', title: 'Noise', url: '/c', text: 'Irrelevant document body that is long enough.', similarityScore: 0.1 },
+            {
+                id: 'c',
+                title: 'Noise',
+                url: '/c',
+                text: 'Irrelevant document body that is long enough.',
+                similarityScore: 0.1,
+            },
         ];
         const { context, sources } = buildContext(hits);
         expect(context).toContain('[Source 1]');
@@ -210,7 +243,11 @@ describe('Pipeline integration', () => {
         const fs = createFakeFirestore();
         seedChunks(fs);
         const pipeline = createPipeline(
-            { firestore: fs, embeddings: embedIdentity, reranker: { rerank: async (_q: string, h: Hit[]) => h } },
+            {
+                firestore: fs,
+                embeddings: embedIdentity,
+                reranker: { rerank: async (_q: string, h: Hit[]) => h },
+            },
             { confidenceThreshold: 0.9, maxConcurrent: 2 },
         );
         const result = await pipeline.run('what is the return policy?');
@@ -239,7 +276,11 @@ describe('Pipeline integration', () => {
         const fs = createFakeFirestore();
         seedChunks(fs);
         const pipeline = createPipeline(
-            { firestore: fs, embeddings: embedIdentity, reranker: { rerank: async (_q: string, h: Hit[]) => h } },
+            {
+                firestore: fs,
+                embeddings: embedIdentity,
+                reranker: { rerank: async (_q: string, h: Hit[]) => h },
+            },
             { confidenceThreshold: 0.99 },
         );
         const result = await pipeline.run('what is the return policy?');

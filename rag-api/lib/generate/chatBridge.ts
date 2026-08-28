@@ -7,7 +7,13 @@
  * contract.
  */
 
-import type { ChatMessage, ChatParams, ChatProvider, ChatStream, NormalizedError } from '../types/chat.js';
+import type {
+    ChatMessage,
+    ChatParams,
+    ChatProvider,
+    ChatStream,
+    NormalizedError,
+} from '../types/chat.js';
 
 let _counter = 0;
 
@@ -22,9 +28,7 @@ export function normalizeError(err: unknown): NormalizedError {
         };
     }
     const msg =
-        candidate && typeof candidate.message === 'string'
-            ? candidate.message
-            : String(err);
+        candidate && typeof candidate.message === 'string' ? candidate.message : String(err);
     return { message: msg, statusCode: null, retryable: true, unstructured: true };
 }
 
@@ -55,7 +59,10 @@ export interface ChatBridge {
     normalizeError(err: unknown): NormalizedError;
 }
 
-export function createChatBridge(deps: ChatBridgeDeps, options: ChatBridgeOptions = {}): ChatBridge {
+export function createChatBridge(
+    deps: ChatBridgeDeps,
+    options: ChatBridgeOptions = {},
+): ChatBridge {
     const model = options.model;
     const reasoning = options.reasoning;
     const requestId = options.requestId ?? (() => `gen-${++_counter}`);
@@ -86,9 +93,10 @@ export function createChatBridge(deps: ChatBridgeDeps, options: ChatBridgeOption
         let stream: ChatStream;
         try {
             const chat = deps.chat;
-            stream = typeof chat.stream === 'function'
-                ? await chat.stream(params)
-                : await chat.send!(params);
+            stream =
+                typeof chat.stream === 'function'
+                    ? await chat.stream(params)
+                    : await chat.send!(params);
         } catch (err) {
             throw normalizeError(err);
         }

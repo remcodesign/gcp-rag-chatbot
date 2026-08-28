@@ -8,7 +8,9 @@ describe('resolveApiBase', () => {
     });
 
     it('returns the injected window global (deploy-time override)', () => {
-        (globalThis as { window?: unknown }).window = { __RAG_API_BASE__: 'https://rag-api-abc.ez.a.run.app' };
+        (globalThis as { window?: unknown }).window = {
+            __RAG_API_BASE__: 'https://rag-api-abc.ez.a.run.app',
+        };
         expect(resolveApiBase()).toBe('https://rag-api-abc.ez.a.run.app');
     });
 

@@ -70,7 +70,7 @@ class FakeDocumentRef implements FirestoreDocumentRef {
 
     async get(): Promise<FirestoreDocumentSnapshot> {
         const doc = this._owner.get(this._path);
-        return { exists: !!doc, data: () => (doc ?? undefined) };
+        return { exists: !!doc, data: () => doc ?? undefined };
     }
 
     async set(data: FirestoreDocumentData, opts: { merge?: boolean } = {}): Promise<void> {
@@ -95,7 +95,8 @@ class FakeCollectionRef implements FirestoreCollectionRef {
 
 class FakeWriteBatch implements FirestoreWriteBatch {
     private readonly _owner: FakeWriteEngine;
-    private readonly ops: Array<{ path: DocPath; data: FirestoreDocumentData; merge: boolean }> = [];
+    private readonly ops: Array<{ path: DocPath; data: FirestoreDocumentData; merge: boolean }> =
+        [];
 
     constructor(owner: FakeWriteEngine) {
         this._owner = owner;

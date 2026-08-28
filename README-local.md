@@ -82,11 +82,17 @@ Before creating or editing a file, check **sibling files** and **related code** 
 Run these in order and fix any errors:
 
 ```bash
-# Backend (Node)
-npm test
+# Fast local loop — fix + verify all packages (lint:fix + prettier, then
+# typecheck/lint/knip/test), no Docker build:
+./deploy.sh fix
 
-# Frontend (builds assets, catches Vite/TypeScript errors)
-npm run build
+# Or verify only (no fixes, no build):
+./deploy.sh check
+
+# Per-package (when you only touched one service):
+cd rag-api && npm run typecheck && npm run lint && npm run knip && npm test && npm run build
+cd rag-ingest && npm run typecheck && npm run lint && npm run knip && npm test && npm run build
+cd frontend && npm run typecheck && npm run lint && npm run knip && npm test && npm run build
 
 # Infra (when touching infra/)
 terraform plan
