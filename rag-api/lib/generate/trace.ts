@@ -8,7 +8,7 @@
  */
 
 import type { Hit, RunOutcome } from '../types/rag.js';
-import type { ChatMessage } from '../types/chat.js';
+import type { ChatMessage, TokenUsage } from '../types/chat.js';
 import type { TraceHit, TracePayload } from '../types/trace.js';
 
 const PREVIEW_CHARS = 180;
@@ -55,12 +55,7 @@ interface BuildTraceInput {
     /** LLM generation time (ms), measured by the generator around the stream. */
     generation?: number;
     /** Token usage from the final OpenRouter stream chunk (when reported). */
-    usage?: {
-        promptTokens?: number;
-        completionTokens?: number;
-        totalTokens?: number;
-        cost?: number | null;
-    } | null;
+    usage?: TokenUsage | null;
     /** Time (ms) to first content token. */
     ttftMs?: number;
     /** Completion tokens per second (text emitted / generation time). */

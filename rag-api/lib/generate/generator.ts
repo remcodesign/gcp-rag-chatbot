@@ -27,6 +27,7 @@ import type {
     ChatStream,
     ChatStreamChunk,
     DeltaReader,
+    TokenUsage,
 } from '../types/chat.js';
 import type { StateStoreLike } from '../types/state.js';
 
@@ -90,20 +91,13 @@ export interface GenerateOnceResult {
     requestId: string;
     model: string | null;
     /** Token usage from the final OpenRouter stream chunk (when reported). */
-    usage?: GenerateUsage | null;
+    usage?: TokenUsage | null;
     /** Time (ms) to first content token. */
     ttftMs?: number;
     /** Completion tokens per second (text emitted / generation time). */
     tokensPerSecond?: number | null;
     /** Generation wall-clock time (ms) for this call. */
     generationMs?: number;
-}
-
-export interface GenerateUsage {
-    promptTokens?: number;
-    completionTokens?: number;
-    totalTokens?: number;
-    cost?: number | null;
 }
 
 export interface StreamAnswerInput {
@@ -164,7 +158,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
         let citations: Citation[] = [];
         const genStart = Date.now();
         let ttftMs: number | undefined;
-        let usage: GenerateUsage | undefined;
+        let usage: TokenUsage | undefined;
 
         for await (const chunk of stream) {
             // First (non-empty) content token marks the generation start -> TTFT.
@@ -298,7 +292,7 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
         let attempt = 0;
         const genT0 = Date.now();
         let generationMs = 0;
-        let usage: GenerateUsage | undefined;
+        let usage: TokenUsage | undefined;
         let ttftMs: number | undefined;
         let tokensPerSecond: number | null = null;
 
