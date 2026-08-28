@@ -231,12 +231,12 @@ gcloud run jobs execute rag-ingest --region=europe-west4
 > **Why the seed job sometimes writes `chunkCount: 0` — and the re-seed flow.**
 > The seeder is **idempotent**: it compares the manifest version
 > (`corpus/manifest.version`) against the job's `CURRENT_VERSION`
-> (`rag-ingest/lib/orchestrate.js`). If they match, it exits `already-seeded`
+> (`rag-ingest/lib/orchestrate.ts`). If they match, it exits `already-seeded`
 > and writes nothing. So re-running the *same* job never re-seeds — that's by
 > design. Two things must both be true for a real seed to happen:
 >
 > 1. **The deployed `rag-ingest` image must actually contain the corpus.**
->    `CORPUS_DIR=/corpus` reads corpus baked into the *specific image tag* the
+>    `CORPUS_DIR=/app/corpus` reads corpus baked into the *specific image tag* the
 >    job references (`infra/terraform.tfvars`, `image_tag = <git-sha>`). If the
 >    corpus was added to git *after* that tag was built/pushed/rolled out, the
 >    running job sees zero files → `chunkCount: 0`. Fix: commit first (SHA
@@ -245,7 +245,7 @@ gcloud run jobs execute rag-ingest --region=europe-west4
 >    stored manifest was written by an older/broken run (e.g. a zero-chunk seed)
 >    but still carries the *same* version, the gate treats it as "already
 >    seeded" and skips — even though nothing is in the `chunks` collection.
->    Bump `CURRENT_VERSION` in `rag-ingest/lib/orchestrate.js` to force a real
+>    Bump `CURRENT_VERSION` in `rag-ingest/lib/orchestrate.ts` to force a real
 >    re-seed, commit, push, apply, then execute the job again.
 
 > **Why `./deploy.sh plan` says "No changes" even after you edited code/corpus**
