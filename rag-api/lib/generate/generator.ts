@@ -274,7 +274,6 @@ export function createGenerator(deps: GeneratorDeps, options: GeneratorOptions =
                 context: '',
                 sources: [],
                 retrievalHits: [],
-                classification: null,
                 error: { message: e.message ?? 'retrieval failed' },
                 timings: null,
                 timedOut: true,

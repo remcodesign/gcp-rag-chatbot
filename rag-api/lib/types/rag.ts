@@ -1,9 +1,8 @@
 /**
  * Retrieval / context / pipeline contracts (Domain 3).
  *
- * The `Hit` shape, numbered source map, classification, rerank results, stage
- * timings and the RAG `RunOutcome` / `Pipeline` surface that the generator
- * consumes.
+ * The `Hit` shape, numbered source map, rerank results, stage timings and the
+ * RAG `RunOutcome` / `Pipeline` surface that the generator consumes.
  */
 
 import type { FirestoreDocumentData } from './firestore.js';
@@ -41,11 +40,6 @@ export interface ListedSource {
     text: string;
 }
 
-export interface Classification {
-    rewrite: boolean;
-    reason: string;
-}
-
 export interface RerankResult {
     hits: Hit[];
     didRerank: boolean;
@@ -58,7 +52,7 @@ export interface StageTimings {
     retrieval: number;
     rerank: number;
     generation?: number;
-    /** RAG-pipeline total (ms): classify + embed + retrieve + rerank + context build. */
+    /** RAG-pipeline total (ms): embed + retrieve + rerank + context build. */
     total: number;
     /** End-to-end total (ms): pipeline `total` + LLM `generation`. */
     e2e?: number;
@@ -77,21 +71,18 @@ export interface RunOutcome {
     sourceMap: SourceMap;
     context: string;
     sources?: ListedSource[];
-    classification?: Classification | null;
     rerankInfo?: RerankInfo | null;
     timings?: StageTimings | null;
     timedOut: boolean;
-    rewriteRequested?: boolean;
     error?: { message: string } | null;
 }
 
-/** The `pipeline.run` + `classifyQuery` surface injected into the generator. */
+/** The `pipeline.run` surface injected into the generator. */
 export interface Pipeline {
     run(
         query: string,
-        options?: { history?: ChatMessage[]; rewrittenQuery?: string },
+        options?: { history?: ChatMessage[] },
     ): Promise<RunOutcome>;
-    classifyQuery(query: string, options?: { history?: ChatMessage[] }): Classification;
 }
 
 // ---------------------------------------------------------------------------

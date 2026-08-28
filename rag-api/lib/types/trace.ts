@@ -2,12 +2,11 @@
  * RAG trace types — the frontend "inner workings" sidebar.
  */
 
-import type { Classification, StageTimings } from './rag.js';
+import type { StageTimings } from './rag.js';
 
 /** RAG trace payload sent over SSE to the frontend "inner workings" sidebar. */
 export interface TracePayload {
     query: string;
-    classification: Classification | null;
     retrieved: TraceHit[];
     rerank: { didRerank: boolean; reason: string };
     context: { sources: Array<{ n: number; id?: string }>; length: number };

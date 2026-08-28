@@ -12,20 +12,10 @@
 import type {
     NormalizedTrace,
     RawTrace,
-    TraceClassification,
     TraceContext,
     TraceRerank,
     TraceTimings,
 } from '../types/trace';
-
-/** Parses the classification reason into a short human label. */
-export function describeClassification(classification: TraceClassification | null | undefined): string {
-    if (!classification) return 'self-contained (no rewrite)';
-    if (classification.rewrite) {
-        return `needs rewrite — ${classification.reason || 'ambiguous'}`;
-    }
-    return classification.reason || 'self-contained (no rewrite)';
-}
 
 /**
  * Shapes the backend `trace` payload for rendering.
@@ -37,7 +27,6 @@ export function normalizeTrace(trace: RawTrace | null | undefined): NormalizedTr
     if (!trace) return null;
     return {
         query: trace.query || '',
-        classification: describeClassification(trace.classification),
         retrieved: Array.isArray(trace.retrieved) ? trace.retrieved : [],
         rerank: trace.rerank || ({ didRerank: false, reason: '' } satisfies TraceRerank),
         context: trace.context || ({ sources: [], length: 0 } satisfies TraceContext),

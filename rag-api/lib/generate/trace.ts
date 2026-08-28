@@ -103,7 +103,6 @@ export function buildTrace(
 
     const payload: TracePayload = {
         query: preview(outcome.query ?? '', QUERY_PREVIEW_CHARS),
-        classification: outcome.classification ?? null,
         retrieved,
         rerank,
         context,

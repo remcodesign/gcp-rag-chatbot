@@ -73,7 +73,6 @@
                 <div class="mb-6">
                     <h3 class="m-0 mb-1.5 text-[12px] uppercase tracking-[0.05em] text-(--muted)">Query</h3>
                     <p class="m-0 mb-1 text-[14px] font-semibold">{{ trace.query }}</p>
-                    <p class="my-0.5 text-[12px] text-(--muted)">Classification: {{ trace.classification }}</p>
                 </div>
 
                 <div class="mb-6">

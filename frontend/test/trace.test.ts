@@ -1,34 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
     normalizeTrace,
-    describeClassification,
     formatScore,
     formatTokensPerSecond,
     formatCost,
     timingBars,
 } from '../src/lib/trace';
-import type { RawTrace, TraceClassification } from '../src/types/trace';
-
-describe('describeClassification', () => {
-    it('renders a self-contained reason', () => {
-        const label = describeClassification({ rewrite: false, reason: 'self-contained query; no rewrite needed' });
-        expect(label).toContain('self-contained');
-    });
-
-    it('renders a rewrite needed signal', () => {
-        const label = describeClassification({ rewrite: true, reason: 'ambiguous pronoun with prior context' });
-        expect(label).toContain('needs rewrite');
-    });
-
-    it('handles a missing classification', () => {
-        expect(describeClassification(null)).toContain('self-contained');
-    });
-});
+import type { RawTrace } from '../src/types/trace';
 
 describe('normalizeTrace', () => {
     const fullTrace: RawTrace = {
         query: 'return policy',
-        classification: { rewrite: false, reason: 'self-contained' },
         retrieved: [
             { id: 'a', title: 'Return', url: '/a', score: 0.9, textPreview: '...', chars: 20, keptInContext: true, rank: 1, category: null, text: '' },
         ],
@@ -55,7 +37,6 @@ describe('normalizeTrace', () => {
     it('surfaces a retrieval error so the sidebar can explain empty retrieval', () => {
         const trace = normalizeTrace({
             query: 'x',
-            classification: null as TraceClassification | null,
             retrieved: [],
             rerank: { didRerank: false, reason: '' },
             context: { sources: [], length: 0 },
@@ -111,7 +92,6 @@ describe('normalizeTrace usage + token-speed passthrough', () => {
     it('surfaces usage, TTFT and tokens-per-second when present', () => {
         const trace = normalizeTrace({
             query: 'q',
-            classification: { rewrite: false, reason: 'self-contained' },
             retrieved: [],
             rerank: { didRerank: false, reason: 'above threshold' },
             context: { sources: [], length: 0 },
@@ -128,7 +108,6 @@ describe('normalizeTrace usage + token-speed passthrough', () => {
     it('defaults usage fields to safe nulls when absent', () => {
         const trace = normalizeTrace({
             query: 'q',
-            classification: { rewrite: false, reason: 'self-contained' },
             retrieved: [],
             rerank: { didRerank: false, reason: '' },
             context: { sources: [], length: 0 },

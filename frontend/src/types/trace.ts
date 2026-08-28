@@ -32,12 +32,6 @@ export interface TraceContext {
     length: number;
 }
 
-/** Classification result (backend `classifyQuery`). */
-export interface TraceClassification {
-    rewrite: boolean;
-    reason?: string;
-}
-
 /** Per-stage timings in milliseconds. */
 export interface TraceTimings {
     embed: number;
@@ -45,7 +39,7 @@ export interface TraceTimings {
     rerank: number;
     /** LLM generation time (ms), measured by the backend generator. */
     generation?: number;
-    /** RAG-pipeline total (ms): classify + embed + retrieve + rerank + context build. */
+    /** RAG-pipeline total (ms): embed + retrieve + rerank + context build. */
     total: number;
     /** End-to-end total (ms): pipeline `total` + LLM `generation`. */
     e2e?: number;
@@ -67,7 +61,6 @@ export interface TraceUsage {
 /** The raw (partial-tolerant) trace payload emitted by the backend. */
 export interface RawTrace {
     query?: string;
-    classification?: TraceClassification | null;
     retrieved?: TraceHit[];
     rerank?: TraceRerank;
     context?: TraceContext;
@@ -86,7 +79,6 @@ export interface RawTrace {
 /** The normalized trace expected by the sidebar. */
 export interface NormalizedTrace {
     query: string;
-    classification: string;
     retrieved: TraceHit[];
     rerank: TraceRerank;
     context: TraceContext;

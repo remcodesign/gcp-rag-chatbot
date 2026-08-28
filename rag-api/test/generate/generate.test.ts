@@ -84,7 +84,6 @@ function toStream(gen: () => AsyncGenerator<unknown, void, unknown>): ChatStream
 function stalePipeline(): Pipeline {
     return {
         run: async () => ({ query: 'q', hits: [], sourceMap: {}, context: '', sources: [], retrievalHits: [], timedOut: false }),
-        classifyQuery: () => ({ rewrite: false, reason: 'self-contained query; no rewrite needed' }),
     };
 }
 
@@ -365,12 +364,10 @@ describe('RAG trace event (POC sidebar data)', () => {
                 sourceMap: { 1: { title: 'Return', url: '/help/returns', id: 'returns-01' } },
                 context: '[Source 1] You can return within 30 days.',
                 sources: [{ n: 1, title: 'Return', url: '/help/returns', id: 'returns-01', text: '' }],
-                classification: { rewrite: false, reason: 'self-contained' },
                 rerankInfo: { didRerank: false, reason: 'above threshold' },
                 timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
                 timedOut: false,
             }),
-            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
         };
         const sink = makeSink();
         const sse = createSse(sink);
@@ -432,12 +429,10 @@ describe('RAG trace event (POC sidebar data)', () => {
                 sourceMap: {},
                 context: '',
                 sources: [],
-                classification: { rewrite: false, reason: 'self-contained' },
                 rerankInfo: { didRerank: false, reason: 'above threshold' },
                 timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
                 timedOut: false,
             }),
-            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
         };
         const sink = makeSink();
         const sse = createSse(sink);
@@ -467,12 +462,10 @@ describe('RAG trace event (POC sidebar data)', () => {
                 sourceMap: {},
                 context: '',
                 sources: [],
-                classification: { rewrite: false, reason: 'self-contained' },
                 rerankInfo: { didRerank: false, reason: 'above threshold' },
                 timings: { embed: 10, retrieval: 20, rerank: 5, total: 35 },
                 timedOut: false,
             }),
-            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
         };
         const sink = makeSink();
         const sse = createSse(sink);
@@ -514,7 +507,6 @@ describe('RAG trace event (POC sidebar data)', () => {
         let seenMessages: ChatMessage[] = [];
         const pipeline: Pipeline = {
             run: async (q, opts) => { seenMessages = opts?.history ?? []; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: 'ctx', sources: [], timedOut: false }; },
-            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
         };
         const sink = makeSink();
         const sse = createSse(sink);
@@ -532,7 +524,7 @@ describe('RAG trace event (POC sidebar data)', () => {
         expect(userPersisted[0]?.content).toBe('En de wachtrij?');
         expect(userPersisted[0]?.complete).toBe(true);
         expect(persisted.some((m) => m.role === 'assistant')).toBe(true);
-        // Prior turns forwarded to the pipeline for classification/history.
+        // Prior turns forwarded to the pipeline for history.
         expect(seenMessages.map((m) => m.content)).toEqual(['Hoe werken retouren?', 'Binnen 30 dagen.']);
         // The LLM prompt includes the prior turns (via buildMessages) before the new query.
         const traceFrame = parseFrames(sink.frames).find((f) => f.event === 'trace');
@@ -554,7 +546,6 @@ describe('RAG trace event (POC sidebar data)', () => {
         const called = { pipeline: 0, bridge: 0 };
         const pipeline: Pipeline = {
             run: async (q) => { called.pipeline += 1; return { query: q, hits: [], retrievalHits: [], sourceMap: {}, context: '', sources: [], timedOut: false }; },
-            classifyQuery: () => ({ rewrite: false, reason: 'self-contained' }),
         };
         const sink = makeSink();
         const sse = createSse(sink);

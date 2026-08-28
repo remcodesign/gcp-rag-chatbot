@@ -5,7 +5,6 @@
 import { createRetriever } from './retriever.js';
 import { createReranker } from './reranker.js';
 import { buildContext } from './context.js';
-import { classifyQuery } from './classifyQuery.js';
 import type { RetrieverDeps } from './retriever.js';
 import type { Pipeline, RunOutcome, Hit } from '../types/rag.js';
 import type { ChatMessage } from '../types/chat.js';
@@ -31,19 +30,15 @@ export interface PipelineOptions {
 
 export interface PipelineRunInput {
     history?: ChatMessage[];
-    rewrittenQuery?: string;
 }
 
 export function createPipeline(deps: PipelineDeps, options: PipelineOptions = {}): Pipeline {
     const retriever = createRetriever(deps, options);
     const reranker = createReranker({ reranker: deps.reranker }, options);
 
-    async function run(query: string, { history = [], rewrittenQuery }: PipelineRunInput = {}): Promise<RunOutcome> {
+    async function run(query: string, _options: PipelineRunInput = {}): Promise<RunOutcome> {
         const t0 = Date.now();
-        const classification = classifyQuery(query, { history });
-
-        const effectiveQuery = rewrittenQuery ?? query;
-        const embedResult = await retriever.embedAndRetrieve(effectiveQuery, {
+        const embedResult = await retriever.embedAndRetrieve(query, {
             embedTimeoutMs: options.embedTimeoutMs,
         });
         const t1 = Date.now();
@@ -55,16 +50,14 @@ export function createPipeline(deps: PipelineDeps, options: PipelineOptions = {}
                 sourceMap: {},
                 context: '',
                 sources: [],
-                classification,
                 rerankInfo: null,
                 timings: { embed: t1 - t0, retrieval: 0, rerank: 0, total: t1 - t0 },
                 timedOut: true,
-                rewriteRequested: classification.rewrite,
             };
         }
 
         const retrievalHits = embedResult.hits;
-        const rerankOutcome = await reranker.rerank(effectiveQuery, retrievalHits);
+        const rerankOutcome = await reranker.rerank(query, retrievalHits);
         const t2 = Date.now();
         const context = buildContext(rerankOutcome.hits, {
             minScore: options.minScore,
@@ -79,13 +72,11 @@ export function createPipeline(deps: PipelineDeps, options: PipelineOptions = {}
             sourceMap: context.sourceMap,
             context: context.context,
             sources: context.sources,
-            classification,
             rerankInfo: { didRerank: rerankOutcome.didRerank, reason: rerankOutcome.reason },
             timings: { embed: t1 - t0, retrieval: t2 - t1, rerank: t3 - t2, total: t3 - t0 },
             timedOut: false,
-            rewriteRequested: classification.rewrite,
         };
     }
 
-    return { run, classifyQuery };
+    return { run };
 }

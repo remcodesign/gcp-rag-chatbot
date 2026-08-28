@@ -4,7 +4,6 @@ import type { RunOutcome } from '../../lib/types/rag.js';
 
 const OUTCOME: RunOutcome = {
     query: 'What is the return policy?',
-    classification: { rewrite: false, reason: 'self-contained query; no rewrite needed' },
     retrievalHits: [
         {
             id: 'returns-01',

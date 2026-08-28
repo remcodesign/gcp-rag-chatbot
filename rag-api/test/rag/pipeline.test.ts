@@ -4,12 +4,10 @@ import { createRetriever } from '../../lib/rag/retriever.js';
 import type { Retriever } from '../../lib/rag/retriever.js';
 import { createReranker } from '../../lib/rag/reranker.js';
 import { buildContext, isRelevant } from '../../lib/rag/context.js';
-import { classifyQuery } from '../../lib/rag/classifyQuery.js';
 import { createSemaphore, withSoftTimeout } from '../../lib/rag/limiter.js';
 import { createFakeFirestore } from '../fakes/fakeFirestore.js';
 import type { FakeFirestore } from '../fakes/fakeFirestore.js';
 import type { Embedder, Hit } from '../../lib/types/rag.js';
-import type { ChatMessage } from '../../lib/types/chat.js';
 
 /** Writes a few chunk docs with embeddings into the fake Firestore. */
 function seedChunks(firestore: FakeFirestore): void {
@@ -49,25 +47,6 @@ const embedIdentity = {
         return [0, 0, 1];
     },
 };
-
-describe('Step 3.1 — Query classification (conditional rewrite)', () => {
-    it('passes a self-contained query straight to retrieval — no rewrite', () => {
-        const history: ChatMessage[] = [{ role: 'user', content: 'hi' }];
-        const r = classifyQuery('what is your return policy', { history });
-        expect(r.rewrite).toBe(false);
-    });
-
-    it('rewrites an ambiguous pronoun query when prior context exists', () => {
-        const history: ChatMessage[] = [{ role: 'user', content: 'Tell me about the return policy.' }];
-        const r = classifyQuery('its cancellation policy?', { history });
-        expect(r.rewrite).toBe(true);
-    });
-
-    it('does not rewrite an ambiguous pronoun without context to anchor it', () => {
-        const r = classifyQuery('what happens with it?', { history: [] });
-        expect(r.rewrite).toBe(false);
-    });
-});
 
 describe('Step 3.2 — retrieval: single Firestore findNearest', () => {
     let fs: FakeFirestore;
@@ -227,7 +206,7 @@ describe('Step 3.5 — context + source map construction', () => {
 });
 
 describe('Pipeline integration', () => {
-    it('runs the full flow: classify -> embed -> retrieve -> rerank -> context', async () => {
+    it('runs the full flow: embed -> retrieve -> rerank -> context', async () => {
         const fs = createFakeFirestore();
         seedChunks(fs);
         const pipeline = createPipeline(
@@ -235,7 +214,6 @@ describe('Pipeline integration', () => {
             { confidenceThreshold: 0.9, maxConcurrent: 2 },
         );
         const result = await pipeline.run('what is the return policy?');
-        expect(result.classification?.rewrite).toBe(false);
         expect(result.hits?.length).toBeGreaterThan(0);
         expect(result.sourceMap).toBeDefined();
         expect(result.context).toMatch(/\[Source 1\]/);
