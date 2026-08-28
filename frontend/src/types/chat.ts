@@ -88,15 +88,3 @@ export interface ChatStore {
     retry(): Promise<void>;
     reset(): void;
 }
-
-/** A token delta delivered by a `token` frame. */
-export interface TokenEvent {
-    text: string;
-    citations: Citation[];
-}
-
-/** A `progress` event payload. */
-export interface ProgressEvent {
-    stage: ProgressStage;
-    progress: number;
-}

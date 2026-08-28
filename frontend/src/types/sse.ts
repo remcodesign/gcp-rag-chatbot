@@ -57,9 +57,3 @@ export interface Source {
     id: string;
     text?: string;
 }
-
-/** Window-global augmentation injected at deploy time (config.ts). */
-export interface RagRuntimeGlobals {
-    __RAG_API_BASE__?: string;
-    __RAG_TRACE__?: string | boolean;
-}

@@ -15,8 +15,6 @@ export const SSE_EVENT = {
     TRACE: 'trace',
 } as const;
 
-export type SseEvent = (typeof SSE_EVENT)[keyof typeof SSE_EVENT];
-
 export interface SseFrameData {
     [key: string]: unknown;
 }

@@ -15,12 +15,3 @@ export interface MarkdownDeps {
     parse?: MarkdownParser;
     sanitize?: Sanitizer;
 }
-
-/** DOMPurify interop shape (module may export directly or via `.default`). */
-export interface DOMPurifyLike {
-    sanitize: Sanitizer;
-    default?: { sanitize: Sanitizer };
-}
-
-/** DOMPurify factory callable as `dompurify({ window }) -> { sanitize }`. */
-export type DOMPurifyFactory = (opts: { window: unknown }) => DOMPurifyLike;

@@ -50,9 +50,6 @@ export const STATUS = {
     ERROR: 'error',
 } as const;
 
-/** Status value type derived from the `STATUS` constant. */
-export type StatusValue = (typeof STATUS)[keyof typeof STATUS];
-
 /** Max conversation turns before the backend ends the session (matches rag-api). */
 export const MAX_CONVERSATION_TURNS = 5;
 

@@ -15,10 +15,3 @@ export type RagWindow = Window & {
 	__RAG_API_BASE__?: string;
 	__RAG_TRACE__?: string | boolean;
 };
-
-/** Results of resolving the backend origin. */
-export interface ApiBaseResolution {
-	/** The backend origin, or `''` for same-origin (dev proxy). */
-	baseUrl: string;
-	source: 'window' | 'import-meta' | 'default';
-}

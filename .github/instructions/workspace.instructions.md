@@ -45,6 +45,7 @@ not be reintroduced.
 - **`rag-api` and `rag-ingest` are 100% strict TypeScript — NO `.js` files in their `lib/`, `src/`, `test/`, and NO `any` anywhere** (ESLint enforces `@typescript-eslint/no-explicit-any: 'error'`). Each `tsconfig.json` is `strict: true`, `noImplicitAny: true`, `verbatimModuleSyntax`. Both compile to `dist/` via `tsconfig.build.json` (`npm run build`); the Dockerfiles compile in a build stage and run the compiled entry (`node dist/src/server.js` for rag-api, `node dist/src/cli.js` for rag-ingest). Shared cross-module types live in a `lib/types/` folder — `firestore.ts`, `corpus.ts`, `embedder.ts`, etc. — imported **directly** by domain file (no barrel), e.g. `import type { Hit } from '../types/rag.js'`.
 - **NodeNext ESM gotcha:** source files are `.ts` but import specifiers keep the **`.js` suffix** (what `tsc` emits and what Node's ESM resolution expects). Vite/vitest does NOT map `.js`→`.ts` by default, so `vitest.config.js` ships a tiny `resolveJsImportsToTs` plugin to rewrite `.js` specifiers to `.ts` during tests.
 - **`rag-api` and `rag-ingest` have NO `smoke` script** — their compile step (`tsc -p tsconfig.build.json`, `npm run build`) IS the module/export resolve guard: strict TS + `noImplicitAny` fail on a dangling import/export before push. (Previously `rag-ingest` kept `scripts/smoke.js` while it was checkJs `.js`.)
+- **Dead-code gate = `knip`** (`npm run knip`, config in `knip.json`). It catches unused exports/files/deps that `tsc`/ESLint can't see. It runs in the deploy check chain (`typecheck → lint → knip → test → build`), NOT inside `npm run build` (the Docker build has no tests, so knip would misreport dev-only deps/test-only exports). See `.github/skills/dead-code-knip/SKILL.md` for settings and how to avoid introducing dead code.
 - **No `lib/<domain>/index.ts` barrels** — every consumer imports the domain factory file directly (`pipeline.js`, `sessionStore.js`, `generator.js`, ...). Types are also imported directly (no `types/` barrel). Pattern: `create*Store({deps}, options)` — `options` is ALWAYS the second arg.
 - **No barrel files anywhere** (runtime or types): never add an `index.ts` that only re-exports (`export * from ...` / `export { ... } from ...`) to give a short import path. Import the concrete file directly (`pipeline.ts`, `sessionStore.ts`, `sse.ts`, `firestore.ts`, ...). This applies to `frontend/` too (`frontend/src/types/` has no `index.ts`). If a name is needed in two domains, re-export it from its owning file — do not build a barrel.
 - **Tests need zero cloud credentials** — use in-memory Firestore-shaped fakes (`test/fakes/fakeFirestore.ts`, incl. `findNearest`, `batch().commit()`, `runTransaction`), typed against the `Firestore` interface in `lib/types/firestore.ts`. Inject fake clock / short TTL for determinism; never use real timers.
@@ -81,12 +82,21 @@ not be reintroduced.
 
 ## Quick references (canonical)
 ```bash
-# Type-checking (all packages gated in deploy.sh):
-cd rag-api      && npm run typecheck && npm run lint && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
-cd rag-ingest   && npm run typecheck && npm run lint && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
-cd frontend   && npm run typecheck && npm run lint && npm test && npm run build   # strict TS (vue-tsc)
+# Type-checking + dead-code gate (all packages gated in deploy.sh):
+cd rag-api      && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
+cd rag-ingest   && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
+cd frontend   && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # strict TS (vue-tsc)
 
 ./deploy.sh build/push/plan     # build+push git-SHA tag; NEVER apply for the agent
 ./tf.sh plan                    # plan + HTML viewer (credentials via wrapper)
 gcloud run jobs execute rag-ingest --region=europe-west4      # after apply, for corpus
 ```
+
+> **Dead code:** every package runs **`knip`** (`npm run knip`) as part of the
+> deploy gate (`typecheck → lint → knip → test → build`) to catch unused
+> exports/files/deps. Knip runs in the check chain (full source + tests), NOT
+> inside `npm run build` — the Docker build only copies `lib`/`src` (no tests),
+> so knip would misreport dev-only deps and test-only exports there. See the
+> **`.github/skills/dead-code-knip/SKILL.md`** skill for the settings that keep
+> knip from reporting half the codebase (notably `ignoreExportsUsedInFile`) and
+> for how to avoid introducing dead code in the first place.

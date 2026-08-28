@@ -101,16 +101,20 @@ build_all() {
 }
 
 # Domain 9 / Step 9.5 — the tooling gate.
-# order: typecheck -> lint -> test -> build.
+# order: typecheck -> lint -> knip -> test -> build.
 # Every package is now strict TS (rag-api, rag-ingest) or strict TS + build
 # dist-based (frontend): the compiled `tsc -p tsconfig.build.json` / `vite build`
 # (`check_build=1`) is the module/export resolve guard. No package carries a
 # standalone `smoke` script; `check_build=0` is unused but kept for flexibility.
+# `knip` is the dead-code gate. It runs HERE (full source + tests present), NOT
+# inside `npm run build` — the Docker build only copies lib/src (no tests), so
+# knip would misreport dev-only deps and test-only exports there.
 run_checks() {
   local dir="$1" check_build="${2:-0}"
   echo "==> Checks: ${dir}"
   ( cd "$ROOT/$dir" && npm run typecheck )
   ( cd "$ROOT/$dir" && npm run lint )
+  ( cd "$ROOT/$dir" && npm run knip )
   ( cd "$ROOT/$dir" && npm test )
   if [[ "$check_build" == "1" ]]; then
     ( cd "$ROOT/$dir" && npm run build )

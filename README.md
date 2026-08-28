@@ -199,6 +199,13 @@ redeploy (no silent `:latest` no-op).
 ./deploy.sh apply
 ```
 
+> **Quality gate before every build:** `deploy.sh` runs, per package,
+> `typecheck → lint → knip → test → build`. **`knip`** is the dead-code gate —
+> it catches unused exports/files/dependencies that `tsc`/ESLint can't see, so
+> dead code can't slip in. See
+> [`.github/skills/dead-code-knip/SKILL.md`](.github/skills/dead-code-knip/SKILL.md)
+> for the settings and how to avoid introducing dead code in the first place.
+
 After a **code/corpus change**, commit it **first** so the git-SHA tag bumps —
 otherwise `apply` sees the same tag and is a no-op:
 

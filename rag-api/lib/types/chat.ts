@@ -45,12 +45,6 @@ export interface ChatProvider {
     stream?(params: ChatParams): Promise<ChatStream>;
 }
 
-export interface ChatResponse {
-    requestId: string;
-    model: string | null;
-    stream: ChatStream;
-}
-
 export interface NormalizedError {
     message: string;
     statusCode: number | null;

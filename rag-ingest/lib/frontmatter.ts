@@ -28,9 +28,6 @@ export type ParseResult =
 /** Required front-matter keys. A file missing any of these is skipped (logged). */
 export const REQUIRED_KEYS = ['id', 'category', 'title', 'url'] as const;
 
-/** Optional front-matter keys parsed when present (never required). */
-export const OPTIONAL_KEYS = ['tags'] as const;
-
 export interface ParseOptions {
     requiredKeys?: readonly string[];
 }
