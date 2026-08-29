@@ -39,12 +39,12 @@ server {
         # downgrade to HTTP/1.0 and close the connection, truncating the stream).
         proxy_set_header Connection '';
         # nginx's default proxy_buffer_size (4k) is too small for the BFF's
-        # response header block, causing "upstream sent too big header" -> 502.
-        # Raise it so the SSE response headers fit.
-        proxy_buffer_size 16k;
-        proxy_buffers 4 16k;
+        # response header block (Cloud Run's edge adds a large GAESA cookie),
+        # causing "upstream sent too big header" -> 502. Raise it generously.
+        proxy_buffer_size 64k;
+        proxy_buffers 4 64k;
         # Cloud Run's edge adds a large GAESA Set-Cookie to every response;
-        # the frontend doesn't need it, so strip it to avoid "too big header".
+        # the frontend doesn't need it, so strip it from the client response.
         proxy_hide_header Set-Cookie;
         # SSE: disable buffering so frames stream through.
         proxy_buffering off;
@@ -62,10 +62,12 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
         # The BFF scales to zero; give it time to cold-start and respond.
         proxy_read_timeout 300s;
-        proxy_buffer_size 16k;
-        proxy_buffers 4 16k;
+        # Cloud Run's edge adds a large GAESA cookie to the response header;
+        # raise the buffer so it doesn't trigger "too big header" -> 502.
+        proxy_buffer_size 64k;
+        proxy_buffers 4 64k;
         # Cloud Run's edge adds a large GAESA Set-Cookie to every response;
-        # the frontend doesn't need it, so strip it to avoid "too big header".
+        # the frontend doesn't need it, so strip it from the client response.
         proxy_hide_header Set-Cookie;
     }
 }
