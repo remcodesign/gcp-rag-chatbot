@@ -1,18 +1,18 @@
 /**
  * Runtime config for the frontend.
  *
- * The Vue app is served from `rag-frontend-*.run.app`, but the SSE backend
- * lives on a different origin (`rag-api-*.run.app`). The frontend must know
- * that backend origin to open the stream.
+ * The Vue app is served from `rag-frontend-*.run.app`. The SSE backend is now
+ * reached SAME-ORIGIN: nginx proxies `/sessions/*` to the BFF (rag-bff), which
+ * rate-limits and forwards to the private rag-api. So the default API base is
+ * `''` (same-origin) — no cross-origin call, no CORS.
  *
  * Resolution order:
- *   1. `window.__RAG_API_BASE__`  — injected by Cloud Run at deploy time via a
- *      `<script>` snippet. Best for per-environment wiring.
- *   2. `import.meta.env.VITE_API_BASE`  — Vite build-time env var (dev/devpreview).
- *   3. `''`  — same-origin (local dev via the vite dev proxy).
+ *   1. `import.meta.env.VITE_API_BASE`  — Vite build-time env var (local dev
+ *      against a deployed BFF, or a dev proxy).
+ *   2. `''`  — same-origin (production via the nginx proxy, or local dev via
+ *      the vite dev proxy).
  */
 
-import type { RagWindow } from '../types/config';
 import type { ViteEnv } from '../types/config';
 
 /** Build-time env accessor typing — Vite statically inlines
@@ -22,10 +22,6 @@ import type { ViteEnv } from '../types/config';
 const env = import.meta.env as unknown as ViteEnv;
 
 export function resolveApiBase(): string {
-    if (typeof window !== 'undefined') {
-        const w = window as RagWindow;
-        if (w.__RAG_API_BASE__) return w.__RAG_API_BASE__;
-    }
     if (env.VITE_API_BASE) {
         return env.VITE_API_BASE;
     }
@@ -39,7 +35,7 @@ export function resolveApiBase(): string {
  */
 export function resolveTraceEnabled(): boolean {
     if (typeof window !== 'undefined') {
-        const w = window as RagWindow;
+        const w = window as Window & { __RAG_TRACE__?: string | boolean };
         if (w.__RAG_TRACE__ !== undefined) return Boolean(w.__RAG_TRACE__);
     }
     if (env.VITE_RAG_TRACE !== undefined) {

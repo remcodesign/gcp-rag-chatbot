@@ -7,6 +7,7 @@ import {
     timingColor,
     type TimingBar,
 } from '../lib/trace';
+import type { LimitInfo } from '../lib/limits';
 import type { Source } from '../types/sse';
 import type { NormalizedTrace, TraceHit } from '../types/trace';
 
@@ -31,6 +32,12 @@ defineProps<{
     timingRows: TimingBar[];
     /** Whether any token-usage / token-speed data is available to render. */
     hasUsage: boolean;
+    /** Rate-limit usage (IP + session) from the BFF, or null before first poll. */
+    limitInfo: LimitInfo | null;
+    /** Seconds until the IP window resets. */
+    ipResetSecs: number;
+    /** Seconds until the session window resets. */
+    sessionResetSecs: number;
 }>();
 
 const emit = defineEmits<{
@@ -66,6 +73,25 @@ const emit = defineEmits<{
             >
                 Gesprek: {{ turnCount }} / {{ MAX_CONVERSATION_TURNS }}
                 <span v-if="conversationEnded"> — klaar, start een nieuw gesprek.</span>
+            </div>
+
+            <!-- Rate-limit usage (POC): IP + session windows with reset countdown -->
+            <div
+                v-if="limitInfo"
+                class="mb-4 rounded-lg border border-(--border) px-3 py-2.5 text-[12px] text-(--muted)"
+            >
+                <div class="flex justify-between">
+                    <span>IP: {{ limitInfo.ip.count }} / {{ limitInfo.ip.max }}</span>
+                    <span v-if="ipResetSecs > 0">reset in {{ ipResetSecs }}s</span>
+                    <span v-else>reset</span>
+                </div>
+                <div class="flex justify-between">
+                    <span
+                        >Session: {{ limitInfo.session.count }} / {{ limitInfo.session.max }}</span
+                    >
+                    <span v-if="sessionResetSecs > 0">reset in {{ sessionResetSecs }}s</span>
+                    <span v-else>reset</span>
+                </div>
             </div>
 
             <p v-if="!trace" class="text-[14px] text-(--muted)">

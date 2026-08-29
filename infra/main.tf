@@ -12,6 +12,12 @@ provider "google-beta" {
   region  = var.region
 }
 
+# Project number is needed to build the Cloud Run service URL
+# (https://<service>-<project-number>-<region>.run.app).
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
 # Service accounts: one for the streaming backend, one for the seed job.
 resource "google_service_account" "api" {
   account_id   = "rag-api-sa"

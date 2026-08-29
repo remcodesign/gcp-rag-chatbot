@@ -193,14 +193,31 @@ export function createChatStore(
         });
 
         let buffer = '';
-        for await (const chunk of iterable) {
-            if (controller.signal.aborted) return { ok: false };
-            const { frames, rest } = parser.parseSse(buffer + chunk);
-            buffer = rest;
-            for (const frame of frames) handleFrame(frame);
-            if (state.status === 'done' || state.status === 'error') {
-                return { ok: state.status === 'done' };
+        try {
+            for await (const chunk of iterable) {
+                if (controller.signal.aborted) return { ok: false };
+
+                const { frames, rest } = parser.parseSse(buffer + chunk);
+                buffer = rest;
+
+                for (const frame of frames) handleFrame(frame);
+
+                if (state.status === 'done' || state.status === 'error') {
+                    return { ok: state.status === 'done' };
+                }
             }
+        } catch (err) {
+            // The transport threw (e.g. HTTP 429 from the BFF rate limiter).
+            // Surface it as a visible error instead of an unhandled rejection.
+            const e = err as Error & { statusCode?: number };
+
+            state.status = STATUS.ERROR;
+            state.error = {
+                message: e.message ?? 'connection lost — retry manually',
+                detail: e.statusCode ? `HTTP ${e.statusCode}` : undefined,
+            };
+
+            return { ok: false };
         }
         // Stream ended without a terminal event -> treat as interrupted.
         return { ok: false };

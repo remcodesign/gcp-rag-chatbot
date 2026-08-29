@@ -137,6 +137,24 @@ describe('chatStore — streaming (Step 6.1)', () => {
             statusCode: 400,
         });
     });
+
+    it('surfaces a transport throw (e.g. HTTP 429 rate limit) as a visible error', async () => {
+        const send = async function* send(): AsyncGenerator<string, void, unknown> {
+            yield ''; // satisfy require-yield; the throw happens on first pull
+            const err: Error & { statusCode?: number } = new Error(
+                'Te veel verzoeken — wacht even en probeer opnieuw.',
+            );
+            err.statusCode = 429;
+            throw err;
+        };
+        const store = createChatStore({ send, parser: { parseSse } });
+        await store.sendMessage({ sessionId: 's1', query: 'q' });
+        expect(store.state.status).toBe(STATUS.ERROR);
+        expect(store.state.error?.message).toBe(
+            'Te veel verzoeken — wacht even en probeer opnieuw.',
+        );
+        expect(store.state.error?.detail).toBe('HTTP 429');
+    });
 });
 
 describe('chatStore — progress UI (Step 6.2)', () => {

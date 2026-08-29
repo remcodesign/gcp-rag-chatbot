@@ -23,6 +23,8 @@ COPY nginx.conf.template /etc/nginx/conf.d/default.conf.template
 
 # Cloud Run expects the container to listen on $PORT (set at deploy time).
 # Cloud Run overrides this at runtime; the default here is for local runs.
+# BFF_URL is the rag-bff origin the nginx proxy forwards /sessions/* to.
 ENV PORT=8080
+ENV BFF_URL=http://localhost:8081
 EXPOSE 8080
-CMD ["/bin/sh", "-c", "envsubst '${PORT}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]
+CMD ["/bin/sh", "-c", "envsubst '${PORT} ${BFF_URL}' < /etc/nginx/conf.d/default.conf.template > /etc/nginx/conf.d/default.conf && exec nginx -g 'daemon off;'"]

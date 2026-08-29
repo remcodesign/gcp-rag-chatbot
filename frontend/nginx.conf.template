@@ -21,6 +21,31 @@ server {
         add_header Cache-Control "public, immutable";
     }
 
-    # The UI calls rag-api (Node) on a DIFFERENT origin, so CORS applies.
-    # Nothing is reverse-proxied here.
+    # The UI calls the BFF (rag-bff) on the SAME origin. nginx proxies
+    # /sessions/* to the BFF, which rate-limits and forwards to the private
+    # rag-api. No CORS is needed between the frontend and the BFF (same-origin).
+    location /sessions/ {
+        proxy_pass ${BFF_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # SSE: keep the upstream connection alive (without this nginx may
+        # downgrade to HTTP/1.0 and close the connection, truncating the stream).
+        proxy_set_header Connection '';
+        # SSE: disable buffering so frames stream through.
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+    }
+
+    # POC: the sidebar polls the BFF's /limits/:sessionId endpoint (rate-limit
+    # usage). Proxy it to the BFF too, so the frontend stays same-origin.
+    location /limits/ {
+        proxy_pass ${BFF_URL};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
 }

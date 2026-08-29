@@ -1,4 +1,4 @@
-image_tag = "60a9d73"
+image_tag = "7ce0e32"
 
 # Non-thinking for now (faster, cheaper); flip to `true` to enable reasoning.
 # Later could be per-session from Firestore instead of a fixed git choice.

@@ -45,7 +45,9 @@ export async function* openSseStream(
 
     if (!res.ok || !res.body) {
         const err: Error & { statusCode?: number } = new Error(
-            `SSE request failed: HTTP ${res.status}`,
+            res.status === 429
+                ? 'Te veel verzoeken — wacht even en probeer opnieuw.'
+                : `SSE request failed: HTTP ${res.status}`,
         );
         err.statusCode = res.status;
         throw err;

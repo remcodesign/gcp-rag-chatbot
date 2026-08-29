@@ -5,6 +5,7 @@ import { openSseStream } from './lib/sseTransport';
 import { renderAnswer } from './lib/citations';
 import { resolveApiBase, resolveTraceEnabled } from './lib/config';
 import { normalizeTrace, timingBars } from './lib/trace';
+import { useLimits } from './composables/useLimits';
 import { toChunkModal } from './lib/chunkModal';
 import { SAMPLE_GROUPS } from './lib/sampleQuestions';
 import ChatHeader from './components/ChatHeader.vue';
@@ -39,6 +40,18 @@ const store = createChatStore(
 
 const input = ref('');
 const sessionId = ref(crypto.randomUUID());
+
+// --- Rate-limit sidebar (POC) -------------------------------------------
+// Reactive rate-limit usage for the trace sidebar. Fetches the BFF's
+// /limits/:sessionId endpoint ON DEMAND — after each user message (via
+// `refresh()`) and when the panel opens. No polling. This is a POC affordance;
+// normally you would not expose rate-limit internals to the client.
+const {
+    limitInfo,
+    ipResetSecs,
+    sessionResetSecs,
+    refresh: refreshLimits,
+} = useLimits(sessionId, showTracePanel);
 
 // The scrollable chat thread container; auto-scrolled to the bottom on new
 // content so later answers stay in view.
@@ -142,6 +155,7 @@ function pickSample(text: string): void {
     if (!text.trim() || isStreaming.value) return;
     input.value = '';
     void store.sendMessage({ sessionId: sessionId.value, query: text.trim() });
+    void refreshLimits();
 }
 
 // --- Chat input / submit / retry / new session --------------------------
@@ -150,6 +164,7 @@ async function submit(): Promise<void> {
     if (!q || isStreaming.value) return;
     input.value = '';
     await store.sendMessage({ sessionId: sessionId.value, query: q });
+    void refreshLimits();
 }
 
 function retry(): void {
@@ -222,6 +237,9 @@ function newSession(): void {
                 :conversation-ended="conversationEnded"
                 :timing-rows="timingRows"
                 :has-usage="hasUsage"
+                :limit-info="limitInfo"
+                :ip-reset-secs="ipResetSecs"
+                :session-reset-secs="sessionResetSecs"
                 @close="showTracePanel = false"
                 @open-chunk="openChunk"
                 @open-timings="showTimingsModal = true"

@@ -18,6 +18,9 @@ resource "google_cloud_run_service" "api" {
         # Cheap stickiness: route a client's requests to the same instance while
         # the instance is warm, mitigating "instances hopping" during SSE.
         "run.googleapis.com/sessionAffinity" = "true"
+        # Free cold-start accelerator: extra CPU during the startup window so
+        # the Firestore + OpenRouter client boot is faster. No always-on cost.
+        "run.googleapis.com/startup-cpu-boost" = "true"
       }
     }
     spec {
@@ -76,12 +79,14 @@ resource "google_cloud_run_service" "api" {
   }
 }
 
-# Demo: public. Switch to allAuthenticatedUsers + Identity Platform for prod.
-resource "google_cloud_run_service_iam_member" "public" {
+# rag-api is now PRIVATE: only the BFF's service account can invoke it (see
+# bff.tf). The public allUsers invoker is removed so a hostile caller hitting
+# rag-api directly gets 403 (IAM). The BFF is the public entry point.
+resource "google_cloud_run_service_iam_member" "api_private" {
   service  = google_cloud_run_service.api.name
   location = var.region
   role     = "roles/run.invoker"
-  member   = "allUsers"
+  member   = "serviceAccount:${google_service_account.bff.email}"
 }
 
 # --- Frontend: the separate static site (Cloud Run Service) ---
@@ -110,6 +115,13 @@ resource "google_cloud_run_service" "frontend" {
         image = local.frontend_image
         ports {
           container_port = 8080
+        }
+
+        # The BFF origin the nginx proxy forwards /sessions/* to. Same-origin
+        # from the browser's perspective (nginx proxies internally), so no CORS.
+        env {
+          name  = "BFF_URL"
+          value = "https://${google_cloud_run_service.bff.name}-${data.google_project.project.number}-${var.region}.run.app"
         }
       }
 
