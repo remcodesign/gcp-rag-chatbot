@@ -43,6 +43,9 @@ server {
         # Raise it so the SSE response headers fit.
         proxy_buffer_size 16k;
         proxy_buffers 4 16k;
+        # Cloud Run's edge adds a large GAESA Set-Cookie to every response;
+        # the frontend doesn't need it, so strip it to avoid "too big header".
+        proxy_hide_header Set-Cookie;
         # SSE: disable buffering so frames stream through.
         proxy_buffering off;
         proxy_cache off;
@@ -61,5 +64,8 @@ server {
         proxy_read_timeout 300s;
         proxy_buffer_size 16k;
         proxy_buffers 4 16k;
+        # Cloud Run's edge adds a large GAESA Set-Cookie to every response;
+        # the frontend doesn't need it, so strip it to avoid "too big header".
+        proxy_hide_header Set-Cookie;
     }
 }
