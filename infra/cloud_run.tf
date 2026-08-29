@@ -136,15 +136,15 @@ resource "google_cloud_run_service" "frontend" {
         # Rate-limit knobs (per client IP + per session) for the Nitro BFF.
         env {
           name  = "NUXT_RATE_WINDOW_MS"
-          value = "60000"
+          value = tostring(var.rate_window_ms)
         }
         env {
           name  = "NUXT_RATE_MAX_PER_IP"
-          value = "20"
+          value = tostring(var.rate_max_per_ip)
         }
         env {
           name  = "NUXT_RATE_MAX_PER_SESSION"
-          value = "10"
+          value = tostring(var.rate_max_per_session)
         }
       }
 

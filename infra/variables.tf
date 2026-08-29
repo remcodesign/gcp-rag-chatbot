@@ -49,3 +49,21 @@ variable "cors_allowed_origins" {
   type        = string
   default     = "https://rag-frontend-346411608497.europe-west4.run.app,http://localhost:5174"
 }
+
+variable "rate_window_ms" {
+  description = "Nitro BFF rate-limit window length in ms (per client IP + per session)."
+  type        = number
+  default     = 60000
+}
+
+variable "rate_max_per_ip" {
+  description = "Nitro BFF max requests per client IP within the window."
+  type        = number
+  default     = 10
+}
+
+variable "rate_max_per_session" {
+  description = "Nitro BFF max requests per session id within the window."
+  type        = number
+  default     = 4
+}
