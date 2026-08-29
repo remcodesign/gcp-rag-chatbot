@@ -12,8 +12,9 @@ server {
 
     # The browser sends a large GAESA cookie (Google auth). nginx's default
     # large_client_header_buffers (4x8k) can be exceeded, causing a 400
-    # "request header or cookie too large". Raise it so the request headers fit.
-    large_client_header_buffers 4 16k;
+    # "request header or cookie too large". Raise it generously so the large
+    # cookie fits (8 buffers of 32k = 256k total).
+    large_client_header_buffers 8 32k;
 
     # SPA fallback: any non-asset path serves index.html so refreshes/deep links work.
     location / {
