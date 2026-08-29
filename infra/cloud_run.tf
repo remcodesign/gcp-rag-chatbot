@@ -119,9 +119,11 @@ resource "google_cloud_run_service" "frontend" {
 
         # The BFF origin the nginx proxy forwards /sessions/* to. Same-origin
         # from the browser's perspective (nginx proxies internally), so no CORS.
+        # Constructed with the project number + dots (portable, no hardcoded
+        # per-project hash): https://<service>-<project-number>.<region>.run.app
         env {
           name  = "BFF_URL"
-          value = "https://${google_cloud_run_service.bff.name}-${data.google_project.project.number}-${var.region}.run.app"
+          value = "https://${google_cloud_run_service.bff.name}-${data.google_project.project.number}.${var.region}.run.app"
         }
       }
 

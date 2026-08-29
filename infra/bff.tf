@@ -48,9 +48,11 @@ resource "google_cloud_run_service" "bff" {
         }
 
         # The private rag-api base URL the BFF proxies to.
+        # Constructed with the project number + dots (portable, no hardcoded
+        # per-project hash): https://<service>-<project-number>.<region>.run.app
         env {
           name  = "RAG_API_BASE"
-          value = "https://${google_cloud_run_service.api.name}-${data.google_project.project.number}-${var.region}.run.app"
+          value = "https://${google_cloud_run_service.api.name}-${data.google_project.project.number}.${var.region}.run.app"
         }
 
         # Rate-limit knobs (per client IP + per session).

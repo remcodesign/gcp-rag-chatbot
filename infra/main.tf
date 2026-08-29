@@ -12,8 +12,9 @@ provider "google-beta" {
   region  = var.region
 }
 
-# Project number is needed to build the Cloud Run service URL
-# (https://<service>-<project-number>-<region>.run.app).
+# Project number is needed to construct the Cloud Run service URL
+# (https://<service>-<project-number>.<region>.run.app). This is the portable
+# form (no hardcoded per-project hash), so the config works when reused.
 data "google_project" "project" {
   project_id = var.project_id
 }
