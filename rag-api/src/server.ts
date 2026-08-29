@@ -28,16 +28,13 @@ const PORT = Number(process.env.PORT ?? 8080);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-oss-20b';
 
-// Enables model reasoning. Default off = the model's NATIVE behavior (for
-// gpt-oss that is non-thinking, and its concrete slug REJECTS an unsupported
-// `reasoning` param with a 400 — the earlier "generation interrupted" cause).
-// We only send a `reasoning` override when thinking is explicitly ON *and* the
-// model supports it. The value uses `enabled: true` (the modern OpenRouter
-// shape) instead of the old `effort`-only form.
+// Enables model reasoning. Default off = the model's NATIVE behavior.
+// We only send a `reasoning` override when thinking is explicitly ON.
+// The value uses `enabled: true` (the modern OpenRouter shape).
 const THINKING_MODE_ON = (process.env.THINKING_MODE_ON ?? '') === 'true';
-const REASONING_CAPABLE_MODEL = !/gpt-oss/i.test(CHAT_MODEL);
-const reasoning: Record<string, unknown> | undefined =
-    REASONING_CAPABLE_MODEL && THINKING_MODE_ON ? { enabled: true, effort: 'low' } : undefined;
+const reasoning: Record<string, unknown> | undefined = THINKING_MODE_ON
+    ? { enabled: true, effort: 'low' }
+    : undefined;
 
 // Minimum retrieval relevance (0..1) for a chunk to be kept in the LLM context.
 const MIN_SCORE = Number(process.env.MIN_SCORE ?? 0.35);

@@ -144,6 +144,7 @@ function pickSample(text: string): void {
     void store.sendMessage({ sessionId: sessionId.value, query: text.trim() });
 }
 
+// --- Chat input / submit / retry / new session --------------------------
 async function submit(): Promise<void> {
     const q = input.value.trim();
     if (!q || isStreaming.value) return;
