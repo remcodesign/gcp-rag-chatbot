@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { toChunkModal } from '../src/lib/chunkModal';
-import type { Source } from '../src/types/sse';
-import type { TraceHit } from '../src/types/trace';
+import { toChunkModal } from '../lib/chunkModal';
+import type { Source } from '../types/sse';
+import type { TraceHit } from '../types/trace';
 
 describe('toChunkModal', () => {
     it('returns null for a falsy chunk', () => {

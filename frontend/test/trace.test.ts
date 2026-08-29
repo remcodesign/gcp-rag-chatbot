@@ -5,8 +5,8 @@ import {
     formatTokensPerSecond,
     formatCost,
     timingBars,
-} from '../src/lib/trace';
-import type { RawTrace } from '../src/types/trace';
+} from '../lib/trace';
+import type { RawTrace } from '../types/trace';
 
 describe('normalizeTrace', () => {
     const fullTrace: RawTrace = {

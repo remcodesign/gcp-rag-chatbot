@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { SAMPLE_GROUPS } from '../src/lib/sampleQuestions';
-import type { SampleGroup } from '../src/lib/sampleQuestions';
+import { SAMPLE_GROUPS } from '../lib/sampleQuestions';
+import type { SampleGroup } from '../lib/sampleQuestions';
 
 describe('sampleQuestions', () => {
     it('defines one group per corpus folder, every group with questions', () => {

@@ -79,14 +79,14 @@ resource "google_cloud_run_service" "api" {
   }
 }
 
-# rag-api is now PRIVATE: only the BFF's service account can invoke it (see
-# bff.tf). The public allUsers invoker is removed so a hostile caller hitting
-# rag-api directly gets 403 (IAM). The BFF is the public entry point.
+# rag-api is PRIVATE: only the frontend's service account (the Nitro BFF) can
+# invoke it. The public allUsers invoker is removed so a hostile caller hitting
+# rag-api directly gets 403 (IAM). The Nuxt frontend is the public entry point.
 resource "google_cloud_run_service_iam_member" "api_private" {
   service  = google_cloud_run_service.api.name
   location = var.region
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.bff.email}"
+  member   = "serviceAccount:${google_service_account.api.email}"
 }
 
 # --- Frontend: the separate static site (Cloud Run Service) ---
@@ -106,7 +106,7 @@ resource "google_cloud_run_service" "frontend" {
       }
     }
     spec {
-      # Static files -> many concurrent lightweight requests per instance.
+      # Nuxt SSR + Nitro BFF: renders pages and proxies SSE to rag-api.
       container_concurrency = 1000
 
       timeout_seconds = 300
@@ -117,13 +117,26 @@ resource "google_cloud_run_service" "frontend" {
           container_port = 8080
         }
 
-        # The BFF origin the nginx proxy forwards /sessions/* to. Same-origin
-        # from the browser's perspective (nginx proxies internally), so no CORS.
+        # The private rag-api URL the Nitro BFF proxies to (server-to-server).
         # Constructed with the project number + dots (portable, no hardcoded
         # per-project hash): https://<service>-<project-number>.<region>.run.app
         env {
-          name  = "BFF_URL"
-          value = "https://${google_cloud_run_service.bff.name}-${data.google_project.project.number}.${var.region}.run.app"
+          name  = "RAG_API_BASE"
+          value = "https://${google_cloud_run_service.api.name}-${data.google_project.project.number}.${var.region}.run.app"
+        }
+
+        # Rate-limit knobs (per client IP + per session) for the Nitro BFF.
+        env {
+          name  = "RATE_WINDOW_MS"
+          value = "60000"
+        }
+        env {
+          name  = "RATE_MAX_PER_IP"
+          value = "20"
+        }
+        env {
+          name  = "RATE_MAX_PER_SESSION"
+          value = "10"
         }
       }
 

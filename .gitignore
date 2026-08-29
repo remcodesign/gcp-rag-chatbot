@@ -68,3 +68,7 @@ docs/
 
 # plan-view.html
 plan-view.html
+
+# Nuxt build output
+.nuxt/
+.output/

@@ -96,11 +96,9 @@ build_all() {
   # smoke script. The frontend's resolve guard is `vite build` (check_build=1).
   run_checks rag-api 1
   run_checks rag-ingest 1
-  run_checks rag-bff 1
   run_checks frontend 1
   build_image rag-api rag-api
   build_image rag-ingest rag-ingest
-  build_image rag-bff rag-bff
   build_image frontend rag-frontend
 }
 
@@ -139,7 +137,6 @@ push_all() {
 check_all() {
   run_checks rag-api 0
   run_checks rag-ingest 0
-  run_checks rag-bff 0
   run_checks frontend 0
 }
 
@@ -150,7 +147,7 @@ check_all() {
 # Output is compact: only real changes and errors are shown. Prettier's
 # per-file "(unchanged)" lines and ESLint's quiet success are suppressed.
 fix_all() {
-  for dir in rag-api rag-ingest rag-bff frontend; do
+  for dir in rag-api rag-ingest frontend; do
     echo "==> Fix: ${dir}"
     # ESLint --fix: only print files it actually changed (--quiet hides warnings).
     ( cd "$ROOT/$dir" && npm run lint:fix -- --quiet ) || true

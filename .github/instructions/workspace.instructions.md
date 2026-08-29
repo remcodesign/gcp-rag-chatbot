@@ -26,19 +26,23 @@ not be reintroduced.
 - **Terraform is the SOLE deployment controller** — never `gcloud run deploy`. `infra/` owns all GCP resources; the app packages own none.
 - **Releases are never a static `:latest`.** Every release pins a git-**short-SHA** tag committed to `infra/terraform.tfvars`.
 - **100% strict TypeScript in `frontend/`, `rag-api/` AND `rag-ingest/`.** `frontend/` is `.ts` only, no `any`, gated by `vue-tsc` + ESLint `no-explicit-any`. `rag-api` and `rag-ingest` are `.ts` only, no `any`, `strict:true`, compiled to `dist/` via `tsconfig.build.json`. No new `.js` app files should be added to `frontend/` or `rag-api|rag-ingest/lib|src|test|scripts`.
+- **The frontend is a Nuxt 3 app (SSR) whose Nitro server layer IS the BFF.** The browser talks to Nuxt **same-origin**; Nitro rate-limits and proxies the SSE stream to the **PRIVATE** `rag-api` server-to-server using the Nitro service's IAM identity (OIDC token). There is **no separate BFF service and no nginx proxy** (the old `rag-bff` + nginx architecture was abandoned). `rag-api` is private (IAM) — only the frontend's SA can invoke it.
 
 ## Environment (must all agree)
 | Item | Value |
 |------|-------|
 | Project ID | `rag-demo-no-506313-t5` |
 | Region (everywhere) | `europe-west4` |
-| Cloud Run Service / Job | `rag-api` / `rag-ingest` |
-| Registry | `europe-west4-docker.pkg.dev/rag-demo-no-506313-t5/rag/{rag-api,rag-ingest}:<git-sha>` |
+| Cloud Run Services | `rag-api` (PRIVATE), `rag-frontend` (public, Nuxt + Nitro BFF) |
+| Cloud Run Job | `rag-ingest` |
+| Registry | `europe-west4-docker.pkg.dev/rag-demo-no-506313-t5/rag/{rag-api,rag-ingest,rag-frontend}:<git-sha>` |
 | State bucket | `rag-demo-no-506313-t5-terraform-state` (prefix `terraform/state/<workspace>`) |
 | Runner SA | `terraform-runner@rag-demo-no-506313-t5.iam.gserviceaccount.com` (key fetched from bucket by `tf.sh`) |
 | App SAs | `rag-api-sa`, `rag-job-sa` (`datastore.user` + `secretmanager.secretAccessor` + Artifact Registry reader) |
-| Service URL | `https://rag-api-4xxip75eoa-ez.a.run.app` |
+| Service URL | `https://rag-api-4xxip75eoa-ez.a.run.app` (private) |
+| Frontend URL | `https://rag-frontend-<project-number>.europe-west4.run.app` (public) |
 | Health | `/livez` (200), `/readyz` (503 when Firestore down); `/healthz` is reserved by Cloud Run edge |
+| Frontend env | `RAG_API_BASE` (private rag-api URL), `RATE_WINDOW_MS`/`RATE_MAX_PER_IP`/`RATE_MAX_PER_SESSION` (Nitro rate-limit knobs) |
 
 ## Node conventions (`rag-api/`, `rag-ingest/`)
 - **ESM** (`"type": "module"`), **vitest** for tests. Each package has its own `vitest.config.js` → `test/**/*.test.ts`.
@@ -54,17 +58,21 @@ not be reintroduced.
 - SSE: failure at end-of-series = SSE `error` event, **NOT** an HTTP 500. Mid-stream failures → regenerate info, never re-splice, capped `maxRegenRetries`. LLM citations are untrusted — `validateCitations` strips inline `[Source N]` not in the `sourceMap`.
 - Tests on commit: `cd rag-api && npm test` and `cd rag-ingest && npm test` (counts drift as tests are added — don't pin them).
 
-## Frontend conventions (`frontend/` — 100% strict TypeScript)
-- **The frontend is 100% TypeScript — NO `.js` files in `src/` or `test/`, and NO `any` anywhere.** All modules are `.ts` (`.vue` SFCs use `<script setup lang="ts">`); `.ts` types live in `frontend/src/types/` organized per type-set (`sse.ts`, `chat.ts`, `trace.ts`, `markdown.ts`, `config.ts`) with **no `index.ts` barrel** — each type file is imported directly.
-- Type-check = `npm run typecheck` → **`vue-tsc --noEmit`** (`tsconfig.json`: `strict: true`, `noImplicitAny: true`, `verbatimModuleSyntax` — so all type-only imports must use `import type`). ESLint enforces `@typescript-eslint/no-explicit-any: 'error'`.
-- **Styling is 100% Tailwind utilities in `App.vue`** — do NOT add component classes to `src/style.css`. `style.css` is only the `@import 'tailwindcss'` + `@theme`/`:root` tokens + `body` reset. Theme tokens are referenced via `var(--accent)` etc. in arbitrary-key utilities (`bg-[var(--accent)]`) and in the small scoped `<style>` that styles the `v-html` markdown output (`.answer`/`.citation`).
+## Frontend conventions (`frontend/` — Nuxt 3, 100% strict TypeScript)
+- **The frontend is a Nuxt 3 app (SSR + Nitro BFF), 100% TypeScript — NO `.js` files in `lib/`, `types/`, `server/`, `test/`, and NO `any` anywhere.** All modules are `.ts` (`.vue` SFCs use `<script setup lang="ts">`). Structure: `app.vue` (thin composition root → `<NuxtPage />`), `pages/index.vue` (the chat page), `components/` (Tailwind SFCs), `composables/`, `lib/` (pure logic), `types/` (per type-set, **no `index.ts` barrel**), `server/` (Nitro BFF routes + utils).
+- **The Nitro server layer IS the BFF.** `server/api/sessions/[id]/messages.post.ts` rate-limits (per IP + session), mints an OIDC token (Cloud Run only), and proxies the SSE stream to the private `rag-api`. `server/api/limits/[id].get.ts` exposes rate-limit usage (POC). `server/utils/rateLimit.ts` (in-memory limiter) + `server/utils/oidc.ts` (`isCloudRun()` via `K_SERVICE` + `fetchIdToken`).
+- **Browser talks to Nuxt SAME-ORIGIN** — `lib/config.ts` `resolveApiBase()` returns `''`; no cross-origin call, no CORS from the browser. The client-side `lib/limits.ts` `fetchLimits()` calls the Nitro `GET /api/limits/:sessionId` route over HTTP (the browser can't read the server's in-memory limiter directly).
+- Type-check = `npm run typecheck` → **`nuxt typecheck`** (`tsconfig.json` extends `.nuxt/tsconfig.json`, `strict: true`, `noImplicitAny: true`, `verbatimModuleSyntax` — all type-only imports must use `import type`). ESLint enforces `@typescript-eslint/no-explicit-any: 'error'`.
+- **Styling is 100% Tailwind utilities in the components** — do NOT add component classes to `assets/css/main.css`. `main.css` is only the `@import 'tailwindcss'` + `@theme`/`:root` tokens + `body` reset. A small scoped `<style>` styles the `v-html` markdown output (`.answer`/`.citation`).
 - SSE `frame.data` is `unknown` and **narrowed** at each consumer — never `any`.
-- `rag-api` AND `rag-ingest` are now strict TS (like `frontend/`): no `.js` app files, no `any`.
+- `rag-api` AND `rag-ingest` are strict TS (like `frontend/`): no `.js` app files, no `any`.
 - Keep `@typescript-eslint` + `vue-eslint-parser` in the flat ESLint config (required for `.ts` + `.vue` parsing).
 
 ## Terraform / deploy conventions
 - Use wrappers: `./tf.sh <cmd>` (fetch credentials, run in `infra/`) and `./deploy.sh [build|push|plan|apply|check|fix]`. Never run `deploy.sh apply` yourself — it's interactive.
 - Region must match in `variables.tf`, `tf.sh`, `deploy.sh`, AND the registry prefix, or image refs don't resolve.
+- **`rag-api` is PRIVATE (IAM)** — `infra/cloud_run.tf` `api_private` binding gives only the frontend's SA `run.invoker`. The frontend is public (`allUsers`). The old `rag-bff` service was removed (no `infra/bff.tf`).
+- **The frontend Cloud Run service runs the Nuxt image** and sets `RAG_API_BASE` (constructed portably as `https://<service>-<project-number>.<region>.run.app`) + the `RATE_*` knobs. It uses the `api` service account (so it can call the private rag-api via OIDC).
 
 ## Gotchas (highest-frequency agent mistakes)
 1. **Commit BEFORE `deploy.sh plan/apply`.** Image tag = git short SHA of **HEAD**, not the working tree. Uncommitted edits → unchanged tag → `apply` reports "No changes". After a code change expect `2 to change` (Service + Job).
@@ -79,6 +87,10 @@ not be reintroduced.
 8. **`.gitignore *.tfvars`** must negate with `!**/terraform.tfvars` so the committed tag is tracked.
 9. **Stale `.tflock`** in the bucket after an aborted plan → `Error 412 conditionNotMet`. Clear: `gcloud storage rm gs://<bucket>/terraform/state/default.tflock`.
 10. **`deploy.sh push` only fills the registry** — a new tag must still be `apply`d to reach Cloud Run.
+11. **Local dev `RAG_API_BASE not configured` / 500** — the Nitro BFF reads `RAG_API_BASE` (empty locally; only set by Terraform on Cloud Run). Fix: copy `frontend/.env.example` → `frontend/.env` with `RAG_API_BASE=http://localhost:8080` AND run `rag-api` locally (`cd rag-api && OPENROUTER_API_KEY=... npm start`). The frontend itself never needs `OPENROUTER_API_KEY` — only `rag-api` does. You CANNOT point local dev at the deployed (private) `rag-api` — a local Nitro BFF can't mint an OIDC token, so it gets 403.
+12. **`isCloudRun()` via `K_SERVICE`** is the correct local-vs-Cloud-Run switch in `server/utils/oidc.ts` — Cloud Run always sets `K_SERVICE`; it's unset locally. Don't try to detect "local" by checking for a metadata server.
+13. **Frontend Docker build needs npm 11 + Node 22** — Nuxt's toolchain (oxc-parser/transform/minify, lightningcss, @tailwindcss/oxide, rollup) ships native bindings as npm optional deps. npm 10's optional-deps bug (npm/cli#4828) skips them → `nuxt prepare`/`nuxt build` fail with "Cannot find native binding". The `frontend/Dockerfile` build stage uses `node:22-slim` + `RUN npm install -g npm@11 && npm ci`. **Keep `package-lock.json` generated with npm 11** (npm 10's lock omits the platform bindings; and npm 10 can't read an npm-11 lock — EUSAGE "Missing: cac/commander").
+14. **No `infra/bff.tf`** — the Nuxt migration removed the separate BFF service. If a stale `bff.tf` reappears referencing `local.bff_image`, delete it (it breaks `terraform plan` with "Reference to undeclared local value").
 
 ## Quick references (canonical)
 ```bash
@@ -90,7 +102,7 @@ not be reintroduced.
 # Per-package (all gated in deploy.sh):
 cd rag-api      && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
 cd rag-ingest   && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # no creds; build IS the strict-TS resolve guard
-cd frontend   && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # strict TS (vue-tsc)
+cd frontend     && npm run typecheck && npm run lint && npm run knip && npm test && npm run build   # strict TS (nuxt typecheck / nuxt build)
 
 # Formatting (Prettier, via eslint-config-prettier — formatting is Prettier's job, lint is ESLint's):
 npm run format          # prettier --write
@@ -100,6 +112,14 @@ npm run lint:fix        # eslint --fix
 ./deploy.sh build/push/plan     # build+push git-SHA tag; NEVER apply for the agent
 ./tf.sh plan                    # plan + HTML viewer (credentials via wrapper)
 gcloud run jobs execute rag-ingest --region=europe-west4      # after apply, for corpus
+
+# Local dev (frontend + backend):
+# Terminal 1 — rag-api (needs OPENROUTER_API_KEY; paste the key in YOUR terminal, never through the agent):
+cd rag-api && OPENROUTER_API_KEY=sk-... npm start        # :8080
+# Terminal 2 — Nuxt dev server (hot-reloads on :3000):
+cd frontend && npm run dev
+# frontend/.env must set RAG_API_BASE=http://localhost:8080 (copy from .env.example).
+# If a dev server is running, `nuxt build` fails with a lock error — bypass with NUXT_IGNORE_LOCK=1.
 ```
 
 > **Dead code:** every package runs **`knip`** (`npm run knip`) as part of the

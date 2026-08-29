@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { secondsUntilReset } from '../src/lib/limits';
+import { secondsUntilReset } from '../lib/limits';
 
 describe('secondsUntilReset', () => {
     it('returns the seconds until the window resets (happy)', () => {

@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { isProxy, isReactive } from 'vue';
-import { createChatStore, STATUS, STAGES, STAGE_LABELS } from '../src/lib/chatStore';
-import { parseSse } from '../src/lib/sseParser';
-import type { RawTrace } from '../src/types/trace';
-import type { SseFrame } from '../src/types/sse';
-import type { SendParams } from '../src/types/chat';
+import { createChatStore, STATUS, STAGES, STAGE_LABELS } from '../lib/chatStore';
+import { parseSse } from '../lib/sseParser';
+import type { RawTrace } from '../types/trace';
+import type { SseFrame } from '../types/sse';
+import type { SendParams } from '../types/chat';
 
 type TestFrame = SseFrame;
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { renderAnswer, buildSourceChips } from '../src/lib/citations';
-import type { Sanitizer } from '../src/types/markdown';
+import { renderAnswer, buildSourceChips } from '../lib/citations';
+import type { Sanitizer } from '../types/markdown';
 
 const keepHtml: { sanitize: Sanitizer } = { sanitize: (html) => html };
 
