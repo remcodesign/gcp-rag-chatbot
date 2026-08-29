@@ -1,0 +1,22 @@
+# Keep local-only files out of the image. Critically, `.env` must NOT be
+# copied into the build context: `nuxt build` bakes `process.env.*` values
+# (e.g. RAG_API_BASE) into the runtime config at BUILD time. If `.env` is
+# present, the image is built with the LOCAL rag-api URL baked in, and the
+# Cloud Run `RAG_API_BASE` env var (no NUXT_ prefix) cannot override it at
+# runtime — the BFF then proxies to the wrong host and returns 404.
+.env
+.env.*
+!.env.example
+
+# Build artifacts / deps (rebuilt in the image).
+node_modules
+.nuxt
+.output
+dist
+coverage
+
+# Local tooling / editor noise.
+.git
+.gitignore
+*.log
+.DS_Store

@@ -24,11 +24,16 @@ export default defineNuxtConfig({
 
   runtimeConfig: {
     // Private rag-api URL (server-side only — never exposed to the client).
-    ragApiBase: process.env.RAG_API_BASE ?? '',
+    // Read from the NUXT_-prefixed env var so Cloud Run can override it at
+    // RUNTIME (NUXT_RAG_API_BASE). A bare `process.env.RAG_API_BASE` default
+    // would only be read at BUILD time and could not be overridden at runtime
+    // (Nuxt only maps NUXT_* env vars to runtimeConfig keys). The Cloud Run
+    // env var is set in infra/cloud_run.tf as NUXT_RAG_API_BASE.
+    ragApiBase: process.env.NUXT_RAG_API_BASE ?? '',
     // Rate-limit knobs.
-    rateWindowMs: Number(process.env.RATE_WINDOW_MS ?? 60_000),
-    rateMaxPerIp: Number(process.env.RATE_MAX_PER_IP ?? 20),
-    rateMaxPerSession: Number(process.env.RATE_MAX_PER_SESSION ?? 10),
+    rateWindowMs: Number(process.env.NUXT_RATE_WINDOW_MS ?? 60_000),
+    rateMaxPerIp: Number(process.env.NUXT_RATE_MAX_PER_IP ?? 20),
+    rateMaxPerSession: Number(process.env.NUXT_RATE_MAX_PER_SESSION ?? 10),
   },
 
   typescript: {

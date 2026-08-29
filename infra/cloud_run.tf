@@ -123,22 +123,27 @@ resource "google_cloud_run_service" "frontend" {
         # (rag-api-<hash>.europe-west4.run.app) or a project-number-based URL
         # (rag-api-<project-number>.europe-west4.run.app); guessing wrong makes
         # the BFF proxy to a non-existent service and return 404.
+        #
+        # The NUXT_ prefix is REQUIRED: Nuxt only maps NUXT_* env vars to
+        # runtimeConfig keys at RUNTIME. A bare RAG_API_BASE would only be read
+        # at build time (and baked into the image), so it could not be
+        # overridden here.
         env {
-          name  = "RAG_API_BASE"
+          name  = "NUXT_RAG_API_BASE"
           value = google_cloud_run_service.api.status[0].url
         }
 
         # Rate-limit knobs (per client IP + per session) for the Nitro BFF.
         env {
-          name  = "RATE_WINDOW_MS"
+          name  = "NUXT_RATE_WINDOW_MS"
           value = "60000"
         }
         env {
-          name  = "RATE_MAX_PER_IP"
+          name  = "NUXT_RATE_MAX_PER_IP"
           value = "20"
         }
         env {
-          name  = "RATE_MAX_PER_SESSION"
+          name  = "NUXT_RATE_MAX_PER_SESSION"
           value = "10"
         }
       }
