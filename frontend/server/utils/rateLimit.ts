@@ -117,3 +117,23 @@ export function createRateLimiter(
 
     return { check, ipWindow, sessionWindow };
 }
+
+/**
+ * Shared singleton rate limiter for the Nitro BFF.
+ *
+ * The messages route (`POST /api/sessions/:id/messages`) and the limits route
+ * (`GET /api/limits/:id`) MUST share ONE limiter instance, otherwise the
+ * messages route increments its own in-memory buckets while the limits route
+ * reads a different (empty) instance — so the sidebar always shows `count: 0`.
+ *
+ * The first caller's options win (both routes read the same runtime config, so
+ * the values are identical). The instance lives for the process lifetime.
+ */
+let sharedLimiter: RateLimiter | undefined;
+
+export function getSharedRateLimiter(options: RateLimiterOptions = {}): RateLimiter {
+    if (!sharedLimiter) {
+        sharedLimiter = createRateLimiter(options);
+    }
+    return sharedLimiter;
+}

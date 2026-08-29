@@ -12,9 +12,12 @@
 
 import { defineEventHandler, createError, getRouterParam, getRequestIP } from 'h3';
 import { useRuntimeConfig } from '#imports';
+import { getSharedRateLimiter } from '../../../utils/rateLimit';
 
 const config = useRuntimeConfig();
-const limiter = createRateLimiter({
+// Shared singleton so the limits route sees the same counters this route
+// increments (a per-route instance would always report count: 0).
+const limiter = getSharedRateLimiter({
     windowMs: config.rateWindowMs,
     maxPerIp: config.rateMaxPerIp,
     maxPerSession: config.rateMaxPerSession,

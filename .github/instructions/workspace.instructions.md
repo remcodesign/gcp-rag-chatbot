@@ -42,7 +42,7 @@ not be reintroduced.
 | Service URL | `https://rag-api-4xxip75eoa-ez.a.run.app` (private) |
 | Frontend URL | `https://rag-frontend-<project-number>.europe-west4.run.app` (public) |
 | Health | `/livez` (200), `/readyz` (503 when Firestore down); `/healthz` is reserved by Cloud Run edge |
-| Frontend env | `RAG_API_BASE` (private rag-api URL), `RATE_WINDOW_MS`/`RATE_MAX_PER_IP`/`RATE_MAX_PER_SESSION` (Nitro rate-limit knobs) |
+| Frontend env | `NUXT_RAG_API_BASE` (private rag-api URL), `NUXT_RATE_WINDOW_MS`/`NUXT_RATE_MAX_PER_IP`/`NUXT_RATE_MAX_PER_SESSION` (Nitro rate-limit knobs) — the `NUXT_` prefix is REQUIRED so Nuxt overrides runtimeConfig at runtime |
 
 ## Node conventions (`rag-api/`, `rag-ingest/`)
 - **ESM** (`"type": "module"`), **vitest** for tests. Each package has its own `vitest.config.js` → `test/**/*.test.ts`.
@@ -60,7 +60,7 @@ not be reintroduced.
 
 ## Frontend conventions (`frontend/` — Nuxt 3, 100% strict TypeScript)
 - **The frontend is a Nuxt 3 app (SSR + Nitro BFF), 100% TypeScript — NO `.js` files in `lib/`, `types/`, `server/`, `test/`, and NO `any` anywhere.** All modules are `.ts` (`.vue` SFCs use `<script setup lang="ts">`). Structure: `app.vue` (thin composition root → `<NuxtPage />`), `pages/index.vue` (the chat page), `components/` (Tailwind SFCs), `composables/`, `lib/` (pure logic), `types/` (per type-set, **no `index.ts` barrel**), `server/` (Nitro BFF routes + utils).
-- **The Nitro server layer IS the BFF.** `server/api/sessions/[id]/messages.post.ts` rate-limits (per IP + session), mints an OIDC token (Cloud Run only), and proxies the SSE stream to the private `rag-api`. `server/api/limits/[id].get.ts` exposes rate-limit usage (POC). `server/utils/rateLimit.ts` (in-memory limiter) + `server/utils/oidc.ts` (`isCloudRun()` via `K_SERVICE` + `fetchIdToken`).
+- **The Nitro server layer IS the BFF.** `server/api/sessions/[id]/messages.post.ts` rate-limits (per IP + session), mints an OIDC token (Cloud Run only), and proxies the SSE stream to the private `rag-api`. `server/api/limits/[id].get.ts` exposes rate-limit usage (POC). `server/utils/rateLimit.ts` (in-memory limiter + `getSharedRateLimiter()` singleton) + `server/utils/oidc.ts` (`isCloudRun()` via `K_SERVICE` + `fetchIdToken`). **Both routes MUST use `getSharedRateLimiter()`** (not separate `createRateLimiter()` instances) or the limits route always reports `count: 0`.
 - **Browser talks to Nuxt SAME-ORIGIN** — `lib/config.ts` `resolveApiBase()` returns `''`; no cross-origin call, no CORS from the browser. The client-side `lib/limits.ts` `fetchLimits()` calls the Nitro `GET /api/limits/:sessionId` route over HTTP (the browser can't read the server's in-memory limiter directly).
 - Type-check = `npm run typecheck` → **`nuxt typecheck`** (`tsconfig.json` extends `.nuxt/tsconfig.json`, `strict: true`, `noImplicitAny: true`, `verbatimModuleSyntax` — all type-only imports must use `import type`). ESLint enforces `@typescript-eslint/no-explicit-any: 'error'`.
 - **Styling is 100% Tailwind utilities in the components** — do NOT add component classes to `assets/css/main.css`. `main.css` is only the `@import 'tailwindcss'` + `@theme`/`:root` tokens + `body` reset. A small scoped `<style>` styles the `v-html` markdown output (`.answer`/`.citation`).
@@ -72,7 +72,7 @@ not be reintroduced.
 - Use wrappers: `./tf.sh <cmd>` (fetch credentials, run in `infra/`) and `./deploy.sh [build|push|plan|apply|check|fix]`. Never run `deploy.sh apply` yourself — it's interactive.
 - Region must match in `variables.tf`, `tf.sh`, `deploy.sh`, AND the registry prefix, or image refs don't resolve.
 - **`rag-api` is PRIVATE (IAM)** — `infra/cloud_run.tf` `api_private` binding gives only the frontend's SA `run.invoker`. The frontend is public (`allUsers`). The old `rag-bff` service was removed (no `infra/bff.tf`).
-- **The frontend Cloud Run service runs the Nuxt image** and sets `RAG_API_BASE` (constructed portably as `https://<service>-<project-number>.<region>.run.app`) + the `RATE_*` knobs. It uses the `api` service account (so it can call the private rag-api via OIDC).
+- **The frontend Cloud Run service runs the Nuxt image** and sets `NUXT_RAG_API_BASE` (value = `google_cloud_run_service.api.status[0].url` — the ACTUAL assigned URL, not a guessed format) + the `NUXT_RATE_*` knobs. It uses the `api` service account (so it can call the private rag-api via OIDC).
 
 ## Gotchas (highest-frequency agent mistakes)
 1. **Commit BEFORE `deploy.sh plan/apply`.** Image tag = git short SHA of **HEAD**, not the working tree. Uncommitted edits → unchanged tag → `apply` reports "No changes". After a code change expect `2 to change` (Service + Job).
@@ -87,10 +87,12 @@ not be reintroduced.
 8. **`.gitignore *.tfvars`** must negate with `!**/terraform.tfvars` so the committed tag is tracked.
 9. **Stale `.tflock`** in the bucket after an aborted plan → `Error 412 conditionNotMet`. Clear: `gcloud storage rm gs://<bucket>/terraform/state/default.tflock`.
 10. **`deploy.sh push` only fills the registry** — a new tag must still be `apply`d to reach Cloud Run.
-11. **Local dev `RAG_API_BASE not configured` / 500** — the Nitro BFF reads `RAG_API_BASE` (empty locally; only set by Terraform on Cloud Run). Fix: copy `frontend/.env.example` → `frontend/.env` with `RAG_API_BASE=http://localhost:8080` AND run `rag-api` locally (`cd rag-api && OPENROUTER_API_KEY=... npm start`). The frontend itself never needs `OPENROUTER_API_KEY` — only `rag-api` does. You CANNOT point local dev at the deployed (private) `rag-api` — a local Nitro BFF can't mint an OIDC token, so it gets 403.
+11. **Local dev `RAG_API_BASE not configured` / 500** — the Nitro BFF reads `NUXT_RAG_API_BASE` (empty locally; only set by Terraform on Cloud Run). Fix: copy `frontend/.env.example` → `frontend/.env` with `NUXT_RAG_API_BASE=http://localhost:8080` AND run `rag-api` locally (`cd rag-api && OPENROUTER_API_KEY=... npm start`). The frontend itself never needs `OPENROUTER_API_KEY` — only `rag-api` does. You CANNOT point local dev at the deployed (private) `rag-api` — a local Nitro BFF can't mint an OIDC token, so it gets 403.
 12. **`isCloudRun()` via `K_SERVICE`** is the correct local-vs-Cloud-Run switch in `server/utils/oidc.ts` — Cloud Run always sets `K_SERVICE`; it's unset locally. Don't try to detect "local" by checking for a metadata server.
 13. **Frontend Docker build needs npm 11 + Node 22** — Nuxt's toolchain (oxc-parser/transform/minify, lightningcss, @tailwindcss/oxide, rollup) ships native bindings as npm optional deps. npm 10's optional-deps bug (npm/cli#4828) skips them → `nuxt prepare`/`nuxt build` fail with "Cannot find native binding". The `frontend/Dockerfile` build stage uses `node:22-slim` + `RUN npm install -g npm@11 && npm ci`. **Keep `package-lock.json` generated with npm 11** (npm 10's lock omits the platform bindings; and npm 10 can't read an npm-11 lock — EUSAGE "Missing: cac/commander").
 14. **No `infra/bff.tf`** — the Nuxt migration removed the separate BFF service. If a stale `bff.tf` reappears referencing `local.bff_image`, delete it (it breaks `terraform plan` with "Reference to undeclared local value").
+15. **Nuxt runtimeConfig is baked at BUILD time; only `NUXT_*` env vars override at runtime.** `frontend/nuxt.config.ts` reads `process.env.NUXT_RAG_API_BASE` / `NUXT_RATE_*`. A bare `RAG_API_BASE` would be baked into the image at build time and could NOT be overridden by a Cloud Run env var — the BFF would proxy to the wrong host (e.g. `http://localhost:8080` baked from a local `.env`) and return `404 upstream 404` while rag-api logs nothing. Fix: `frontend/.dockerignore` excludes `.env`/`.env.*` (keeps `.env.example`), and `infra/cloud_run.tf` sets `NUXT_RAG_API_BASE` (value = `google_cloud_run_service.api.status[0].url` — the ACTUAL assigned URL, not a guessed format) + `NUXT_RATE_*`. **The image must be REBUILT** (not just `apply`) for `.dockerignore` to take effect.
+16. **Shared rate-limiter singleton.** `server/api/sessions/[id]/messages.post.ts` and `server/api/limits/[id].get.ts` MUST both use `getSharedRateLimiter()` from `server/utils/rateLimit.ts` (a process-lifetime singleton). Separate `createRateLimiter()` instances per route → the limits route reads a different (empty) instance and always reports `count: 0`.
 
 ## Quick references (canonical)
 ```bash
@@ -118,7 +120,7 @@ gcloud run jobs execute rag-ingest --region=europe-west4      # after apply, for
 cd rag-api && OPENROUTER_API_KEY=sk-... npm start        # :8080
 # Terminal 2 — Nuxt dev server (hot-reloads on :3000):
 cd frontend && npm run dev
-# frontend/.env must set RAG_API_BASE=http://localhost:8080 (copy from .env.example).
+# frontend/.env must set NUXT_RAG_API_BASE=http://localhost:8080 (copy from .env.example).
 # If a dev server is running, `nuxt build` fails with a lock error — bypass with NUXT_IGNORE_LOCK=1.
 ```
 

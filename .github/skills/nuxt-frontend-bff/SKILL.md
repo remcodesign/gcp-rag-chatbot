@@ -57,7 +57,7 @@ frontend/
 ### `POST /api/sessions/:id/messages` — the SSE proxy
 `frontend/server/api/sessions/[id]/messages.post.ts`:
 1. **Rate-limits** first (per client IP + per session) — the expensive LLM call must not run if the caller is over budget. Rejects with 429.
-2. Reads `config.ragApiBase` (from `RAG_API_BASE`). If empty → `500 RAG_API_BASE not configured`.
+2. Reads `config.ragApiBase` (from `NUXT_RAG_API_BASE`). If empty → `500 RAG_API_BASE not configured`.
 3. **On Cloud Run only**, mints an OIDC token for the rag-api audience and sends `Authorization: Bearer <token>`. **Locally, no auth header** (a local rag-api isn't IAM-protected).
 4. Proxies the POST to `${ragApiBase}/sessions/:id/messages` and **streams the SSE response back unchanged** (`text/event-stream`, `X-Accel-Buffering: no`).
 
@@ -93,23 +93,44 @@ export async function fetchIdToken(audience: string, deps: OidcDeps = { fetch: g
 ## Runtime config (`nuxt.config.ts`)
 ```ts
 runtimeConfig: {
-  ragApiBase: process.env.RAG_API_BASE ?? '',          // private rag-api URL (server-only)
-  rateWindowMs: Number(process.env.RATE_WINDOW_MS ?? 60_000),
-  rateMaxPerIp: Number(process.env.RATE_MAX_PER_IP ?? 20),
-  rateMaxPerSession: Number(process.env.RATE_MAX_PER_SESSION ?? 10),
+  ragApiBase: process.env.NUXT_RAG_API_BASE ?? '',          // private rag-api URL (server-only)
+  rateWindowMs: Number(process.env.NUXT_RATE_WINDOW_MS ?? 60_000),
+  rateMaxPerIp: Number(process.env.NUXT_RATE_MAX_PER_IP ?? 20),
+  rateMaxPerSession: Number(process.env.NUXT_RATE_MAX_PER_SESSION ?? 10),
 }
 ```
 - `ragApiBase` is **server-side only** — never exposed to the client.
-- On Cloud Run, Terraform sets `RAG_API_BASE` + the `RATE_*` knobs (see `infra/cloud_run.tf`).
+- **The `NUXT_` prefix is REQUIRED.** Nuxt only maps `NUXT_*` env vars to `runtimeConfig` keys at **runtime**. A bare `process.env.RAG_API_BASE` default is read at **build time** and baked into the image; it cannot be overridden at runtime by a Cloud Run `RAG_API_BASE` env var. On Cloud Run, Terraform sets `NUXT_RAG_API_BASE` + the `NUXT_RATE_*` knobs (see `infra/cloud_run.tf`).
+
+## The `NUXT_` prefix + `.dockerignore` trap (deployed 404)
+**Symptom:** deployed `POST /api/sessions/:id/messages` → `404 upstream 404`, but `GET /api/limits/:id` → 200. rag-api has **no logs** for the proxied request.
+
+**Root cause:** `frontend/.env` (with `RAG_API_BASE=http://localhost:8080`) was copied into the Docker image (no `.dockerignore`), and `nuxt build` **baked** `ragApiBase = http://localhost:8080` into the runtime config at **build time**. At runtime, Nuxt only overrides runtimeConfig from `NUXT_`-prefixed env vars, so the Cloud Run `RAG_API_BASE` (no prefix) could **not** override it. The BFF proxied to `http://localhost:8080` = **the frontend container itself** → `upstream 404` (no `/sessions/` route on the frontend). rag-api never saw it (no logs); direct curl to rag-api gave 403 (unrelated IAM).
+
+**Fix (3 parts):**
+1. **`frontend/.dockerignore`** (new) — excludes `.env`/`.env.*` (keeps `.env.example`) so the local `.env` is never baked into the image.
+2. **`frontend/nuxt.config.ts`** — runtimeConfig reads `process.env.NUXT_RAG_API_BASE` / `NUXT_RATE_*`.
+3. **`infra/cloud_run.tf`** — frontend env vars renamed to `NUXT_RAG_API_BASE` (value = `google_cloud_run_service.api.status[0].url`) + `NUXT_RATE_*`. Updated `.env.example` + local `.env` to the `NUXT_` prefix.
+
+**Lesson:** Nuxt runtimeConfig values set from `process.env.X` are baked at BUILD time and can ONLY be overridden at runtime by `NUXT_X` env vars. Never rely on a bare env var to configure a Nuxt/Nitro BFF at runtime — use the `NUXT_` prefix (and keep `.env` out of the Docker image via `.dockerignore`). **The image must be REBUILT** (not just `apply`) for the `.dockerignore` to take effect.
+
+## The shared rate-limiter trap (limits always `count: 0`)
+**Symptom:** `GET /api/limits/:id` returns `200` but `ip.count` and `session.count` are always `0`, even after sending messages.
+
+**Root cause:** both `messages.post.ts` and `limits/[id].get.ts` called `createRateLimiter(...)` at **module top-level**, creating **two separate limiter instances** with independent in-memory `Map`s. The messages route incremented one instance; the limits route read a different (empty) instance → always `count: 0`.
+
+**Fix:** added `getSharedRateLimiter(options)` to `server/utils/rateLimit.ts` — a process-lifetime singleton. Both routes now call `getSharedRateLimiter(...)` (first caller's options win; both read the same runtime config). The messages route increments and the limits route reads the **same** counters.
+
+**Lesson:** any two Nitro routes that must share in-memory state (rate-limit counters, caches) MUST use a shared singleton, not per-route `createRateLimiter()` instances.
 
 ## Local dev — the `RAG_API_BASE not configured` / 500 trap
 **Symptom:** `POST /api/sessions/:id/messages` → `500 (RAG_API_BASE not configured)` on `http://localhost:3000/`.
 
-**Root cause:** locally `RAG_API_BASE` is empty (it's only set by Terraform on Cloud Run), so the BFF throws. Even if set, the old code always minted an OIDC token from the Cloud Run metadata server — which doesn't exist locally.
+**Root cause:** locally `NUXT_RAG_API_BASE` is empty (it's only set by Terraform on Cloud Run), so the BFF throws. Even if set, the old code always minted an OIDC token from the Cloud Run metadata server — which doesn't exist locally.
 
 **Fix (already applied):**
 1. `server/utils/oidc.ts` — `isCloudRun()` gates the OIDC token; locally no auth header is sent.
-2. `frontend/.env.example` → copy to `frontend/.env` with `RAG_API_BASE=http://localhost:8080`.
+2. `frontend/.env.example` → copy to `frontend/.env` with `NUXT_RAG_API_BASE=http://localhost:8080`.
 
 **To run the full local stack:**
 ```bash
@@ -130,7 +151,7 @@ npm run dev
 - `.env` is git-ignored (root `.gitignore`); only `.env.example` is committed.
 
 ## Deployment (Terraform + Cloud Run)
-- **`infra/cloud_run.tf`** defines the `rag-frontend` Cloud Run Service running the Nuxt image. It sets `RAG_API_BASE` (constructed portably as `https://<service>-<project-number>.<region>.run.app`) + the `RATE_*` knobs, and uses the `api` service account.
+- **`infra/cloud_run.tf`** defines the `rag-frontend` Cloud Run Service running the Nuxt image. It sets `NUXT_RAG_API_BASE` (value = `google_cloud_run_service.api.status[0].url` — the ACTUAL assigned URL, not a guessed format) + the `NUXT_RATE_*` knobs, and uses the `api` service account.
 - **`rag-api` is PRIVATE** (`api_private` IAM binding): only the frontend's SA can invoke it. The frontend is public (`allUsers`).
 - **`frontend/Dockerfile`** is multi-stage: `npm ci` → `npm run build` (Nuxt) → runtime runs `node .output/server/index.mjs` on `$PORT` (8080).
 - **`deploy.sh`** gates the frontend with `run_checks frontend 1` (typecheck → lint → knip → test → build) and builds/pushes `rag-frontend:<git-sha>`. **Commit before push/apply** or the tag doesn't bump and `apply` is a no-op.
@@ -157,9 +178,11 @@ npm run dev
 - Gate: `npm run typecheck && npm run lint && npm run knip && npm test && npm run build`.
 
 ## Gotchas (highest-frequency)
-1. **`RAG_API_BASE not configured` locally** → create `frontend/.env` with `RAG_API_BASE=http://localhost:8080` and run `rag-api` locally. Not a Terraform/deploy issue.
+1. **`RAG_API_BASE not configured` locally** → create `frontend/.env` with `NUXT_RAG_API_BASE=http://localhost:8080` and run `rag-api` locally. Not a Terraform/deploy issue.
 2. **Frontend never needs `OPENROUTER_API_KEY`** — only `rag-api` does.
 3. **Can't reach the deployed (private) `rag-api` from local dev** — 403 without a Cloud Run OIDC token. Run `rag-api` locally.
 4. **`nuxt build` lock** — bypass with `NUXT_IGNORE_LOCK=1` if a dev server is running.
 5. **`isCloudRun()` via `K_SERVICE`** is the correct local-vs-Cloud-Run switch — don't try to detect "local" by checking for a metadata server.
 6. **Commit before `deploy.sh push/apply`** — the image tag is the git SHA of HEAD.
+7. **`NUXT_` prefix + `.dockerignore`** — runtimeConfig is baked at build time; only `NUXT_*` env vars override at runtime. Keep `.env` out of the image (`.dockerignore`) and use `NUXT_`-prefixed env vars in `infra/cloud_run.tf`. Rebuild the image for `.dockerignore` to take effect.
+8. **Shared rate-limiter** — `messages.post.ts` and `limits/[id].get.ts` MUST use `getSharedRateLimiter()` (the singleton), not separate `createRateLimiter()` instances, or the limits route always reports `count: 0`.
