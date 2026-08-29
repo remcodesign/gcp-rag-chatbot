@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createSseHandler } from '../../lib/http/handlers/sse.js';
+import { createCors } from '../../lib/cors.js';
 import { SSE_EVENT } from '../../lib/generate/sse.js';
 import type { StreamAnswerInput } from '../../lib/generate/generator.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
@@ -61,7 +62,8 @@ function makeReq(body: string): IncomingMessage {
 
 function makeDeps() {
     const streamAnswer = vi.fn(async (_input: StreamAnswerInput) => {});
-    const { handle } = createSseHandler({ generator: { streamAnswer } });
+    const cors = createCors({ allowedOrigins: ['http://localhost:5174'] });
+    const { handle } = createSseHandler({ generator: { streamAnswer }, cors });
     return { handle, streamAnswer };
 }
 

@@ -56,6 +56,14 @@ resource "google_cloud_run_service" "api" {
           name  = "MIN_SCORE"
           value = tostring(var.min_score)
         }
+
+        # CORS origin allowlist (comma-separated). Only these origins may call
+        # the SSE endpoint from a browser. The deployed frontend URL is the
+        # production caller; localhost is for local dev against a deployed API.
+        env {
+          name  = "CORS_ALLOWED_ORIGINS"
+          value = var.cors_allowed_origins
+        }
       }
 
       service_account_name = google_service_account.api.email

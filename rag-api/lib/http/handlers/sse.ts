@@ -9,12 +9,14 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { createSse } from '../../generate/sse.js';
-import { corsHeaders } from '../../cors.js';
+import type { Cors } from '../../cors.js';
 import type { Generator } from '../../generate/generator.js';
 import type { SseRequestBody } from '../../types/http.js';
 
 interface SseHandlerDeps {
     generator: Pick<Generator, 'streamAnswer'>;
+    /** CORS helpers bound to the origin allowlist (for the SSE response head). */
+    cors: Cors;
 }
 
 export interface SseHandler {
@@ -31,7 +33,8 @@ export function createSseHandler(deps: SseHandlerDeps): SseHandler {
         res: ServerResponse,
         sessionId: string,
     ): Promise<void> {
-        const sse = createSse(res, { extraHeaders: corsHeaders() });
+        const origin = req.headers.origin as string | undefined;
+        const sse = createSse(res, { extraHeaders: deps.cors.corsHeaders(origin) });
         let body = '';
 
         for await (const chunk of req) body += chunk as string;

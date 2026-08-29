@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { createRouter } from '../../lib/http/router.js';
+import { createCors } from '../../lib/cors.js';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
 /** A recording response sink standing in for a Node `ServerResponse`. */
@@ -39,7 +40,8 @@ function makeDeps() {
     const handleSse = vi.fn(async () => {});
     const handleLiveness = vi.fn(() => {});
     const handleReadiness = vi.fn(async () => {});
-    const { route } = createRouter({ handleSse, handleLiveness, handleReadiness });
+    const cors = createCors({ allowedOrigins: ['http://localhost:5174'] });
+    const { route } = createRouter({ cors, handleSse, handleLiveness, handleReadiness });
     return { route, handleSse, handleLiveness, handleReadiness };
 }
 
@@ -89,11 +91,12 @@ describe('HTTP router', () => {
         await route(
             makeReq('OPTIONS', '/sessions/x/messages', {
                 'access-control-request-method': 'POST',
+                origin: 'http://localhost:5174',
             }),
             res as unknown as ServerResponse,
         );
         expect(res.status).toBe(204);
-        expect(res.head?.['Access-Control-Allow-Origin']).toBe('*');
+        expect(res.head?.['Access-Control-Allow-Origin']).toBe('http://localhost:5174');
         expect(handleSse).not.toHaveBeenCalled();
         expect(handleLiveness).not.toHaveBeenCalled();
         expect(handleReadiness).not.toHaveBeenCalled();

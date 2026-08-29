@@ -43,3 +43,9 @@ variable "min_score" {
   type        = number
   default     = 0.35
 }
+
+variable "cors_allowed_origins" {
+  description = "Comma-separated CORS origin allowlist for the rag-api SSE endpoint. Only these origins may call it from a browser. Defaults to the deployed frontend URL + localhost for local dev."
+  type        = string
+  default     = "https://rag-frontend-346411608497.europe-west4.run.app,http://localhost:5174"
+}

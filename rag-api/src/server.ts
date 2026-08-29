@@ -22,6 +22,7 @@ import { createChatBridge } from '../lib/generate/chatBridge.js';
 import { createOpenRouterClient } from '../lib/generate/openRouterClient.js';
 import { createOpenRouterEmbedder } from '../lib/rag/openRouterEmbedder.js';
 import { createHealth } from '../lib/health.js';
+import { createCors } from '../lib/cors.js';
 import { createRouter } from '../lib/http/router.js';
 import { createSseHandler } from '../lib/http/handlers/sse.js';
 import type { Firestore as FirestoreShaped } from '../lib/types/firestore.js';
@@ -29,6 +30,14 @@ import type { Firestore as FirestoreShaped } from '../lib/types/firestore.js';
 const PORT = Number(process.env.PORT ?? 8080);
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY ?? '';
 const CHAT_MODEL = process.env.CHAT_MODEL ?? 'openai/gpt-oss-20b';
+
+// Comma-separated origin allowlist for CORS. Only these origins may call the
+// SSE endpoint from a browser. Defaults to the deployed frontend + local dev.
+// Set via infra/cloud_run.tf (CORS_ALLOWED_ORIGINS) so prod and dev differ.
+const CORS_ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 
 // Enables model reasoning. Default off = the model's NATIVE behavior.
 // We only send a `reasoning` override when thinking is explicitly ON.
@@ -72,10 +81,23 @@ function createRuntime(): {
     const generator = createGenerator({ bridge, pipeline, store: state }, { reasoning });
     const { handleLiveness, handleReadiness } = createHealth({ firestore });
 
+    // CORS origin allowlist (browser-level "domain filtering"). When the env
+    // var is unset (e.g. local `node dist/src/server.js`), fall back to the
+    // deployed frontend + localhost so the service still works out of the box.
+    const cors = createCors({
+        allowedOrigins:
+            CORS_ALLOWED_ORIGINS.length > 0
+                ? CORS_ALLOWED_ORIGINS
+                : [
+                      'https://rag-frontend-346411608497.europe-west4.run.app',
+                      'http://localhost:5174',
+                  ],
+    });
+
     // Mount the HTTP surface: the SSE streaming handler + the router. The
     // router owns URL/method dispatch; the server is just a thin listener.
-    const { handle } = createSseHandler({ generator });
-    const { route } = createRouter({ handleSse: handle, handleLiveness, handleReadiness });
+    const { handle } = createSseHandler({ generator, cors });
+    const { route } = createRouter({ cors, handleSse: handle, handleLiveness, handleReadiness });
 
     const server = http.createServer((req, res) => {
         route(req, res).catch((err) => {

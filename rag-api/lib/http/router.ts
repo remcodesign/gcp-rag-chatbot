@@ -8,9 +8,11 @@
  */
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { handlePreflight } from '../cors.js';
+import type { Cors } from '../cors.js';
 
 interface RouterDeps {
+    /** CORS helpers bound to the origin allowlist. */
+    cors: Cors;
     /** SSE streaming handler for `POST /sessions/:id/messages`. */
     handleSse(req: IncomingMessage, res: ServerResponse, sessionId: string): Promise<void>;
     /** Liveness (`GET /livez`, `GET /`). */
@@ -32,8 +34,9 @@ export function createRouter(deps: RouterDeps): Router {
         const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
         // CORS preflight (browser sends OPTIONS before the SSE POST from the
-        // separately-hosted frontend origin). Short-circuit with a 204.
-        if (handlePreflight(req, res)) return;
+        // separately-hosted frontend origin). Short-circuit with a 204 (or 403
+        // for a disallowed origin).
+        if (deps.cors.handlePreflight(req, res)) return;
 
         if (req.method === 'POST' && url.pathname.startsWith('/sessions/')) {
             const sessionId = url.pathname.replace(/^\/sessions\//, '').replace(/\/messages$/, '');
