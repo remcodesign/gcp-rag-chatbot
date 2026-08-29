@@ -33,6 +33,11 @@ server {
         # SSE: keep the upstream connection alive (without this nginx may
         # downgrade to HTTP/1.0 and close the connection, truncating the stream).
         proxy_set_header Connection '';
+        # nginx's default proxy_buffer_size (4k) is too small for the BFF's
+        # response header block, causing "upstream sent too big header" -> 502.
+        # Raise it so the SSE response headers fit.
+        proxy_buffer_size 16k;
+        proxy_buffers 4 16k;
         # SSE: disable buffering so frames stream through.
         proxy_buffering off;
         proxy_cache off;
