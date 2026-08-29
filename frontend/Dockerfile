@@ -21,6 +21,9 @@ FROM nginx:1.27-alpine
 # deep links / refreshes working).
 COPY --from=build /app/dist /usr/share/nginx/html
 COPY nginx.conf.template /etc/nginx/conf.d/default.conf.template
+# Override the main nginx.conf to raise worker_connections (SSE streams are
+# long-lived; the default 1024 is exhausted by concurrent streams -> 503).
+COPY nginx.conf /etc/nginx/nginx.conf
 
 # Cloud Run expects the container to listen on $PORT (set at deploy time).
 # Cloud Run overrides this at runtime; the default here is for local runs.
