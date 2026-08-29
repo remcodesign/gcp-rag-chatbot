@@ -10,6 +10,11 @@ server {
     root /usr/share/nginx/html;
     index index.html;
 
+    # The BFF (rag-bff) scales to zero, so its IP changes. nginx caches the
+    # upstream IP at startup; without a resolver it goes stale -> 503. Use
+    # Google's DNS and re-resolve so the BFF hostname is always current.
+    resolver 8.8.8.8 valid=10s ipv6=off;
+
     # The browser sends a large GAESA cookie (Google auth). nginx's default
     # large_client_header_buffers (4x8k) can be exceeded, causing a 400
     # "request header or cookie too large". Raise it generously so the large
@@ -31,7 +36,10 @@ server {
     # /sessions/* to the BFF, which rate-limits and forwards to the private
     # rag-api. No CORS is needed between the frontend and the BFF (same-origin).
     location /sessions/ {
-        proxy_pass ${BFF_URL};
+        # Use a variable so nginx re-resolves the BFF hostname per-request
+        # (the BFF scales to zero, so its IP changes).
+        set $bff ${BFF_URL};
+        proxy_pass $bff;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -56,7 +64,10 @@ server {
     # POC: the sidebar polls the BFF's /limits/:sessionId endpoint (rate-limit
     # usage). Proxy it to the BFF too, so the frontend stays same-origin.
     location /limits/ {
-        proxy_pass ${BFF_URL};
+        # Use a variable so nginx re-resolves the BFF hostname per-request
+        # (the BFF scales to zero, so its IP changes).
+        set $bff ${BFF_URL};
+        proxy_pass $bff;
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
