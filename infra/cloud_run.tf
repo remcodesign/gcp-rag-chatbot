@@ -118,11 +118,14 @@ resource "google_cloud_run_service" "frontend" {
         }
 
         # The private rag-api URL the Nitro BFF proxies to (server-to-server).
-        # Constructed with the project number + dots (portable, no hardcoded
-        # per-project hash): https://<service>-<project-number>.<region>.run.app
+        # Use the ACTUAL URL Cloud Run assigned (status[0].url) rather than
+        # guessing the format. Cloud Run may assign either a hash-based URL
+        # (rag-api-<hash>.europe-west4.run.app) or a project-number-based URL
+        # (rag-api-<project-number>.europe-west4.run.app); guessing wrong makes
+        # the BFF proxy to a non-existent service and return 404.
         env {
           name  = "RAG_API_BASE"
-          value = "https://${google_cloud_run_service.api.name}-${data.google_project.project.number}.${var.region}.run.app"
+          value = google_cloud_run_service.api.status[0].url
         }
 
         # Rate-limit knobs (per client IP + per session) for the Nitro BFF.
