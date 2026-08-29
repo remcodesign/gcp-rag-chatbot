@@ -32,8 +32,8 @@ export default defineNuxtConfig({
     ragApiBase: process.env.NUXT_RAG_API_BASE ?? '',
     // Rate-limit knobs.
     rateWindowMs: Number(process.env.NUXT_RATE_WINDOW_MS ?? 60_000),
-    rateMaxPerIp: Number(process.env.NUXT_RATE_MAX_PER_IP ?? 20),
-    rateMaxPerSession: Number(process.env.NUXT_RATE_MAX_PER_SESSION ?? 10),
+    rateMaxPerIp: Number(process.env.NUXT_RATE_MAX_PER_IP ?? 10),
+    rateMaxPerSession: Number(process.env.NUXT_RATE_MAX_PER_SESSION ?? 4),
   },
 
   typescript: {
