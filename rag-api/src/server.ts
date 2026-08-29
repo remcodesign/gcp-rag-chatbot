@@ -1,27 +1,29 @@
 /**
  * rag-api HTTP server — wires Domains 2, 3 & 5 into a runnable Cloud Run Service.
  *
- * Exposes the SSE streaming endpoint (`POST /sessions/:id/messages`) using only
- * Node's built-in `http` module — no framework dependency. This is the container
- * entry point the Cloud Run Service (`rag-api:latest`) calls on port 8080.
+ * Thin composition root: builds the DI runtime (state, pipeline, generator,
+ * health) and mounts the HTTP router + handlers. Routing and request handling
+ * live in `lib/http/`; this file only wires them together and starts the
+ * listener. Uses only Node's built-in `http` module — no framework dependency.
+ * This is the container entry point the Cloud Run Service (`rag-api:latest`)
+ * calls on port 8080.
  *
  * Security note: OPENROUTER_API_KEY is injected from Secret Manager by Cloud Run
  * (infra/cloud_run.tf env), never baked into the image.
  */
 
 import http from 'node:http';
-import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Firestore } from '@google-cloud/firestore';
 
 import { createPipeline } from '../lib/rag/pipeline.js';
 import { createStateStore } from '../lib/state/sessionStore.js';
 import { createGenerator } from '../lib/generate/generator.js';
-import { createSse } from '../lib/generate/sse.js';
 import { createChatBridge } from '../lib/generate/chatBridge.js';
 import { createOpenRouterClient } from '../lib/generate/openRouterClient.js';
 import { createOpenRouterEmbedder } from '../lib/rag/openRouterEmbedder.js';
 import { createHealth } from '../lib/health.js';
-import { corsHeaders, handlePreflight } from '../lib/cors.js';
+import { createRouter } from '../lib/http/router.js';
+import { createSseHandler } from '../lib/http/handlers/sse.js';
 import type { Firestore as FirestoreShaped } from '../lib/types/firestore.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -48,13 +50,6 @@ const providerConfig: Record<string, unknown> = {
     allow_fallbacks: true,
 };
 
-interface SseRequestBody {
-    query?: unknown;
-    question?: unknown;
-    options?: Record<string, unknown>;
-    trace?: unknown;
-}
-
 function createRuntime(): {
     server: http.Server;
     state: ReturnType<typeof createStateStore>;
@@ -77,66 +72,10 @@ function createRuntime(): {
     const generator = createGenerator({ bridge, pipeline, store: state }, { reasoning });
     const { handleLiveness, handleReadiness } = createHealth({ firestore });
 
-    /**
-     * Minimal SSE handler for POST /sessions/:id/messages.
-     */
-    async function handleSse(
-        req: IncomingMessage,
-        res: ServerResponse,
-        sessionId: string,
-    ): Promise<void> {
-        const sse = createSse(res, { extraHeaders: corsHeaders() });
-        let body = '';
-        for await (const chunk of req) body += chunk as string;
-        let payload: SseRequestBody;
-        try {
-            payload = JSON.parse(body || '{}') as SseRequestBody;
-        } catch {
-            sse.error({ message: 'invalid json body' });
-            return;
-        }
-        const rawQuery = payload.query ?? payload.question;
-        const query = typeof rawQuery === 'string' ? rawQuery : '';
-        if (!query) {
-            sse.error({ message: 'query is required' });
-            return;
-        }
-        // Merge the caller's explicit options; a top-level `trace` boolean (sent by
-        // the frontend transport) is folded in so the generator can emit the RAG
-        // trace event for the "inner workings" sidebar.
-        const options: Record<string, unknown> = { ...(payload.options ?? {}) };
-        if (payload.trace !== undefined && options.trace === undefined) {
-            options.trace = payload.trace;
-        }
-        await generator.streamAnswer({ sse, sessionId, query, options: options as never });
-    }
-
-    async function route(req: IncomingMessage, res: ServerResponse): Promise<void> {
-        const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
-
-        // CORS preflight (browser sends OPTIONS before the SSE POST from the
-        // separately-hosted frontend origin). Short-circuit with a 204.
-        if (handlePreflight(req, res)) return;
-
-        if (req.method === 'POST' && url.pathname.startsWith('/sessions/')) {
-            const sessionId = url.pathname.replace(/^\/sessions\//, '').replace(/\/messages$/, '');
-            return handleSse(req, res, sessionId);
-        }
-        // Health (GET). Modern /livez + /readyz naming is used because it is NOT
-        // reserved by Cloud Run's front-end (unlike /healthz), so the container
-        // answers these publicly. `/health` and `/` are aliases (readiness/liveness).
-        if (req.method === 'GET') {
-            if (url.pathname === '/livez' || url.pathname === '/') {
-                return handleLiveness(req, res);
-            }
-            if (url.pathname === '/readyz' || url.pathname === '/health') {
-                return handleReadiness(req, res);
-            }
-        }
-
-        res.writeHead(404, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'not found' }));
-    }
+    // Mount the HTTP surface: the SSE streaming handler + the router. The
+    // router owns URL/method dispatch; the server is just a thin listener.
+    const { handle } = createSseHandler({ generator });
+    const { route } = createRouter({ handleSse: handle, handleLiveness, handleReadiness });
 
     const server = http.createServer((req, res) => {
         route(req, res).catch((err) => {
