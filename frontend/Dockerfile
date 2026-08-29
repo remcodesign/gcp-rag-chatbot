@@ -2,11 +2,12 @@
 # rag-frontend image — static Vue 3 chat UI (Cloud Run Service)
 # ---------------------------------------------------------------------------
 # Build stage: install deps + build the Vite app to /app/dist.
-# VITE_API_BASE is the SSE backend origin baked into the bundle at build time
-# (the frontend and backend are separate Cloud Run Services). Override with
-# `--build-arg VITE_API_BASE=https://rag-api-...run.app`.
+# The frontend now calls the BFF SAME-ORIGIN: nginx proxies /sessions/* and
+# /limits/* to the BFF (rag-bff), which rate-limits and forwards to the private
+# rag-api. So VITE_API_BASE defaults to EMPTY (same-origin) — no cross-origin
+# call, no CORS. Override only for local dev against a deployed BFF.
 FROM node:20-alpine AS build
-ARG VITE_API_BASE=https://rag-api-4xxip75eoa-ez.a.run.app
+ARG VITE_API_BASE=
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
